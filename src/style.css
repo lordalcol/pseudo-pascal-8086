@@ -611,7 +611,7 @@ input {
   .topbar { padding: 10px 16px; }
   .brand p { display: none; }
   .brand h1 { font-size: 16px; }
-  #share-btn span { display: none; }
+  #share-btn span, .topnav a.btn span { display: none; }
   .toolbar-sep, .toolbar-spacer { display: none; }
   .editor, .code-view { height: 420px; max-height: 60vh; }
   .regs { grid-template-columns: repeat(2, minmax(0, 1fr)); }

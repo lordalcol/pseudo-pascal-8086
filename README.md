@@ -130,7 +130,7 @@ The 2006 code was built with MASM and LINK, and the backups in the archive show 
 - comparisons and printed numbers were unsigned, so `-3` came out as `65533`, after `12`; division didn't sign-extend
 - at the end of the file the scanner kept reading old buffer contents
 
-Other changes: the file name can be given on the command line, files with Unix line ends work, errors exit with code 1 and delete the half-written output, and error messages show the name of the symbol. Two I/O libraries I didn't write (GIOBE by Giorgio Ober, and a course library) are replaced by `RUNTIME.ASM`. Comments, messages and examples are now in English.
+Other changes: the file name can be given on the command line, files with Unix line ends work, errors exit with code 1 and delete the half-written output, and error messages show the name of the symbol. Two I/O libraries I didn't write (GIOBE by Giorgio Ober, and UTIL_PRG) are replaced by `RUNTIME.ASM`. Comments, messages and examples are now in English.
 
 ## Credits
 

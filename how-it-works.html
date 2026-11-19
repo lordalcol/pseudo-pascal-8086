@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>How it was built · Pseudo-Pascal 8086</title>
+    <meta name="description" content="How a compiler written in 8086 assembly for an exam in 2006 works, from the scanner to the stack machine it generates, and how it was restored and ported to JavaScript in 2026." />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#faf8f1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111418" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script type="module" src="/src/docs.ts"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand brand-link" href="./">
+        <span class="logo" aria-hidden="true">86</span>
+        <div>
+          <h1>Pseudo-Pascal 8086</h1>
+          <p>A compiler written in 8086 assembly in 2006, running in your browser</p>
+        </div>
+      </a>
+      <nav class="topnav">
+        <a class="btn ghost" href="./">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>
+          <span>Open the compiler</span>
+        </a>
+        <button id="theme-btn" class="btn ghost icon-only" type="button" title="Theme" aria-label="Theme">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/></svg>
+        </button>
+        <a class="btn ghost icon-only" href="https://github.com/lordalcol/pseudo-pascal-8086" title="Source on GitHub" aria-label="Source on GitHub">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 1.5-4-2-6-2.5m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg>
+        </a>
+      </nav>
+    </header>
+
+    <div class="doc-layout">
+      <nav class="toc" aria-label="On this page">
+        <p class="toc-title">On this page</p>
+        <ol>
+          <li><a href="#project">The 2006 project</a></li>
+          <li><a href="#path">From Pascal to assembly</a></li>
+          <li><a href="#language">The language</a></li>
+          <li><a href="#scanner">The scanner</a></li>
+          <li><a href="#parser">The parser</a></li>
+          <li><a href="#codegen">The code it writes</a></li>
+          <li><a href="#strings">A string stack</a></li>
+          <li><a href="#control">IF and WHILE</a></li>
+          <li><a href="#limits">What it can't do</a></li>
+          <li><a href="#restoration">The 2026 restoration</a></li>
+          <li><a href="#browser">The browser version</a></li>
+        </ol>
+      </nav>
+
+      <article class="doc">
+        <h1 class="doc-title">How it was built</h1>
+        <p class="lead">
+          I wrote this compiler in 2006 as an exam project: a compiler for a small Pascal-like language, written
+          entirely in 8086 assembly, that writes 8086 assembly for MASM. In 2026 I found the archive and, with Claude
+          Code, got it running again, in DOS and in the browser. This page explains how it works, with the real code.
+        </p>
+
+        <section id="project">
+          <h2>The 2006 project</h2>
+          <p>The goals, as I listed them on the first slide:</p>
+          <ul>
+            <li>Translate programs in a pseudo-Pascal language into assembly that MASM and LINK accept, and that works.</li>
+            <li>Integer and character variables, one-dimensional arrays, and string constants, enough to give the programs a minimal interface.</li>
+            <li>IF-ELSE, WHILE and LOOP, and arithmetic and boolean expressions with the right operator precedence.</li>
+            <li>Built-in procedures for keyboard and screen I/O.</li>
+            <li>Proper error handling: show the line and the kind of error.</li>
+          </ul>
+          <p>
+            The compiler is about 2,700 lines of 8086 assembly in ten files, plus a small runtime library. The two
+            I/O libraries it used then, which I didn't write (GIOBE, from Giorgio Ober's assembly tutorial, and
+            UTIL_PRG), are replaced by <code>RUNTIME.ASM</code> in this version. The character and string routines come from the UCR
+            Standard Library that goes with Randy Hyde's <em>The Art of Assembly Language</em>, and I wrote the file
+            I/O from scratch on DOS <code>INT 21h</code>, with 256-byte buffers so the scanner can read the source
+            one character at a time.
+          </p>
+          <p class="download">
+            <a class="btn" href="slides-2006.pdf">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+              The 2006 slides (PDF, Italian)
+            </a>
+          </p>
+          <p>The books and sites in the bibliography were:</p>
+          <ul>
+            <li>Jack W. Crenshaw, <a href="https://compilers.iecc.com/crenshaw/">Let's Build a Compiler</a></li>
+            <li>Randy Hyde, <em>The Art of Assembly Language</em>, and the UCR Standard Library</li>
+            <li>Aho, Sethi and Ullman, <em>Compilers: Principles, Techniques, and Tools</em></li>
+          </ul>
+        </section>
+
+        <section id="path">
+          <h2>From Pascal to assembly</h2>
+          <p>The folders in the archive show the order I built it in:</p>
+          <ol class="steps">
+            <li><b>cradle</b> and <b>tiny</b>: Crenshaw's tutorial, worked through in Turbo Pascal. Like the tutorial, they compile expressions and then a tiny language to Motorola 68000 assembly.</li>
+            <li><b>80x86</b>: the same compiler in Turbo Pascal, retargeted to Intel 8086 and MASM, with the whole language: arrays, strings, LOOP, READINT, inline MASM. It's in the repository as <a href="https://github.com/lordalcol/pseudo-pascal-8086/blob/main/prototype/80X86.PAS"><code>prototype/80X86.PAS</code></a>.</li>
+            <li><b>The assembly version</b>: the Pascal compiler rewritten by hand in 8086 assembly, procedure by procedure. The names stayed the same: <code>Expression</code> in Pascal became <code>pExpression</code> in assembly.</li>
+          </ol>
+          <p>
+            The Pascal version was the specification. Each Pascal procedure is a few lines; in assembly the same
+            procedure needs explicit registers, a stack for anything recursive, and strings handled one byte at a
+            time. Recursion is what makes it hard: <code>pExpression</code> calls <code>pTerm</code>, which calls
+            <code>pFactor</code>, which can call <code>pBoolExpression</code> again for a parenthesis, and every
+            level has to keep its own state somewhere.
+          </p>
+        </section>
+
+        <section id="language">
+          <h2>The language</h2>
+          <p>
+            To keep the compiler simple, every construct has its own closing keyword (<code>endif</code>,
+            <code>endwhile</code>, <code>endloop</code>), <code>=</code> is both assignment and comparison, case
+            doesn't matter, and <code>;</code> starts a comment. Integers and characters are the same 16-bit type;
+            only the I/O procedures differ.
+          </p>
+          <pre class="code" data-source>program
+    var a, b, i          ; 16-bit signed integers (also used as characters)
+    array v[10]          ; arrays of integers, indexed from 0
+    $hello = "Hello!"    ; string constants, for writeStr
+begin
+    a = 7 * (b + 1) / 2  ; + - * /  and parentheses
+    if a > 3 &amp; !(b = 0)  ; = &lt;&gt; &lt; &gt; &lt;= &gt;=   &amp; | ~(xor) !(not)
+        writeStr($hello)
+    else
+        writeInt(a)
+    endif
+    while i &lt; 10
+        v[i] = i * i
+        i = i + 1
+    endwhile
+    loop 3               ; repeats 3 times, with the 8086 LOOP instruction
+        write('*')
+    endloop
+    read(a)              ; a key, without echo
+    readInt(b)           ; a number, with echo
+    write(a)             ; a character
+    newline
+    masm                 ; assembly, copied to the output as is
+        mov ax, a
+        shl ax, 1
+        mov b, ax
+    endmasm
+end.</pre>
+        </section>
+
+        <section id="scanner">
+          <h2>The scanner</h2>
+          <p>
+            The scanner reads the source one character at a time into <code>Look</code>, the lookahead character.
+            <code>pNext</code> skips spaces and comments, looks at the first character, and reads a whole token:
+            a name, a number, a character constant like <code>'a'</code>, a string name like <code>$hello</code>,
+            or a single operator character. It leaves the text in <code>Value</code> and a one-letter code in
+            <code>Token</code>.
+          </p>
+          <pre class="code" data-proc="PGENERAL.ASM:pNext"></pre>
+          <p>
+            A name becomes a keyword only when the parser asks: where a statement or a declaration can start,
+            <code>pScan</code> looks the name up in the keyword list and replaces the <code>x</code> with the
+            keyword's letter. Inside an expression nobody asks, and every word is read as a name.
+          </p>
+          <div class="token-table" id="tokens"></div>
+        </section>
+
+        <section id="parser">
+          <h2>The parser</h2>
+          <p>
+            The parser is recursive descent: one procedure per grammar rule, and the procedures call each other
+            the way the rules refer to each other. There is no syntax tree. Each procedure writes its assembly as
+            soon as it has recognised its piece, so the compiler makes one pass over the source.
+          </p>
+          <pre class="code grammar">&lt;bool_expr&gt;   ::= &lt;bool_term&gt; (('|' | '~') &lt;bool_term&gt;)*
+&lt;bool_term&gt;   ::= &lt;not_factor&gt; ('&amp;' &lt;not_factor&gt;)*
+&lt;not_factor&gt;  ::= ['!'] &lt;relation&gt;
+&lt;relation&gt;    ::= &lt;expression&gt; [&lt;relop&gt; &lt;expression&gt;]
+&lt;expression&gt;  ::= [&lt;addop&gt;] &lt;term&gt; (&lt;addop&gt; &lt;term&gt;)*
+&lt;term&gt;        ::= &lt;factor&gt; (&lt;mulop&gt; &lt;factor&gt;)*
+&lt;factor&gt;      ::= &lt;number&gt; | 'c' | &lt;variable&gt; | &lt;array&gt; '[' &lt;bool_expr&gt; ']'
+                | '(' &lt;bool_expr&gt; ')'</pre>
+          <p>
+            Precedence comes from the nesting: <code>*</code> binds tighter than <code>+</code> because
+            <code>pTerm</code> is called from inside <code>pExpression</code>. Here is <code>pExpression</code>,
+            the rule for <code>+</code> and <code>-</code>:
+          </p>
+          <pre class="code" data-proc="PBLOCKS.ASM:pExpression"></pre>
+        </section>
+
+        <section id="codegen">
+          <h2>The code it writes</h2>
+          <p>
+            The output is code for a stack machine. <code>AX</code> holds the value being computed. Before the
+            right side of an operator is computed, <code>PUSH AX</code> saves the left side, and the operator
+            ends with <code>POP BX</code> and an instruction that combines the two. It's not fast code, but it's
+            correct for any nesting, and the code generator stays tiny.
+          </p>
+          <p>Type an assignment and step through what it compiles to:</p>
+          <div class="stepper" id="stepper">
+            <div class="stepper-input">
+              <label for="expr">Expression, with b = 5 and c = 3</label>
+              <div class="stepper-row">
+                <span class="mono">a =</span>
+                <input id="expr" class="mono" value="(b + 1) * 2 - c" spellcheck="false" autocomplete="off" />
+                <button id="expr-step" class="btn primary small" type="button">Step</button>
+                <button id="expr-reset" class="btn small" type="button">Reset</button>
+              </div>
+            </div>
+            <div class="stepper-body">
+              <ol class="stepper-code" id="expr-code"></ol>
+              <div class="stepper-state">
+                <div class="reg-box"><span>AX</span><b id="expr-ax">0</b></div>
+                <div class="reg-box"><span>BX</span><b id="expr-bx">0</b></div>
+                <div class="stack-box"><span>Stack</span><div id="expr-stack"></div></div>
+                <div class="reg-box"><span>a</span><b id="expr-a">0</b></div>
+              </div>
+            </div>
+            <p class="stepper-note" id="expr-note"></p>
+          </div>
+          <p>
+            Subtraction and division need the operands the other way round: <code>SUB AX,BX</code> computes
+            right minus left, so a <code>NEG AX</code> follows, and division swaps the registers with
+            <code>XCHG</code> first.
+          </p>
+          <p>
+            Comparisons are where the 8086 shows its age. It has no instruction that turns a comparison into a
+            0 or 1, so the generated code calls small routines, <code>SETE</code>, <code>SETL</code> and the
+            others in <code>RUNTIME.ASM</code>, that leave 1 or 0 in <code>AX</code>. Then <code>&amp;</code>,
+            <code>|</code> and <code>!</code> are plain <code>AND</code>, <code>OR</code> and <code>NOT</code>
+            on those values, and an <code>if</code> only has to test bit 0.
+          </p>
+        </section>
+
+        <section id="strings">
+          <h2>A string stack</h2>
+          <p>
+            Recursion needs memory per call. When <code>pFactor</code> sees a name, it can't write
+            <code>MOV AX, name</code> yet: it has to look at the next token first, to see whether a <code>[</code>
+            follows and the name is an array. But reading the next token overwrites <code>Value</code>, and the
+            index expression inside the brackets can contain more names, each read into <code>Value</code> again.
+          </p>
+          <p>
+            In Pascal a local variable solves this. In assembly I wrote <code>PushString</code> and
+            <code>PopString</code>, which keep whole strings on the 8086 stack. The catch is that the procedure's
+            own return address is on top of the stack, so <code>PushString</code> pops it first, pushes the string
+            one character per word, and puts the return address back on top before returning:
+          </p>
+          <pre class="code" data-proc="CHARS.ASM:PushString"></pre>
+          <p>
+            The labels of nested IF and WHILE statements go through the same stack. The compiler's stack segment
+            is 1 KB for that reason, where the programs it compiles get 256 bytes.
+          </p>
+        </section>
+
+        <section id="control">
+          <h2>IF and WHILE</h2>
+          <p>
+            A WHILE needs two labels: one at the test, to jump back to, and one after the loop, to leave. The
+            8086's conditional jumps only reach 128 bytes either way, and a loop body is usually longer, so the
+            condition jumps over a <code>JMP</code> that can go anywhere:
+          </p>
+          <div class="side-by-side">
+            <pre class="code" data-source>while i &lt; 10
+    i = i + 1
+endwhile</pre>
+            <pre class="code" data-compile="var i&#10;begin&#10;while i &lt; 10&#10;    i = i + 1&#10;endwhile&#10;end."></pre>
+          </div>
+          <p>This is the procedure that writes it. Each <code>call</code> to a <code>w...</code> procedure writes a piece of the output:</p>
+          <pre class="code" data-proc="PBLOCKS.ASM:pDoWhile"></pre>
+        </section>
+
+        <section id="limits">
+          <h2>What it can't do</h2>
+          <p>
+            The last slide listed the limits. Floating point would have meant doubling every integer routine.
+            Arrays have one dimension. The hardest one to fix was procedures and functions: they need local and
+            global variables, parameters passed by value and by reference, and memory allocated on the stack for
+            recursive calls, which would have changed the core of the compiler. Programs can still drop into
+            assembly with <code>masm</code> ... <code>endmasm</code> for anything the language lacks, as the
+            guessing game example does to read the BIOS clock.
+          </p>
+        </section>
+
+        <section id="restoration">
+          <h2>The 2026 restoration</h2>
+          <p>
+            The archive had the sources, the 2006 <code>MAIN.EXE</code>, copies of MASM and LINK, and several
+            backup folders. I did the restoration with Claude Code. The first surprise was that the 2006
+            <code>MAIN.EXE</code> doesn't work in DOSBox either: it can't open its input file. These are the bugs that were
+            fixed:
+          </p>
+          <ul class="bugs">
+            <li><code>ReadString</code>, which reads the file name, had no <code>RET</code>: it ran on into whatever code came next in memory.</li>
+            <li>After creating the output file, the compiler opened it again, passing the file handle where DOS expects an access mode. DOS refused, and the compiler stopped.</li>
+            <li>The symbol table was declared as 100 bytes instead of 100 entries of 16 bytes, so new names overwrote the variables after it.</li>
+            <li>Labels were <code>L</code> followed by one character, <code>'0'</code> + the count, so the eleventh label was <code>L:</code>.</li>
+            <li><code>if ... else ... endif</code> wrote the end label twice. None of the 2006 test programs used <code>else</code>.</li>
+            <li><code>a - b + c</code> and <code>a / b * c</code> stopped parsing after the first <code>-</code> or <code>/</code>.</li>
+            <li><code>!</code> was parsed, but the instruction was never written.</li>
+            <li><code>writeStr($a, $b)</code> failed at the comma.</li>
+            <li>Comparisons used the unsigned jumps and numbers printed unsigned, so sorting put <code>-3</code> after <code>12</code>, as <code>65533</code>.</li>
+            <li>At the end of the file, the scanner kept reading the old contents of its buffer.</li>
+          </ul>
+          <p>
+            The rest of the work: building with JWasm instead of MASM (it needs <code>-Zm</code>, MASM 5.1 mode,
+            for the 2006 code), the file name on the command line, English comments and messages, and
+            <code>RUNTIME.ASM</code> in place of the two libraries I didn't write. The whole toolchain still runs
+            inside DOS: <code>BUILD</code> builds the compiler, <code>PAS FIBO</code> compiles, assembles and runs
+            a program.
+          </p>
+        </section>
+
+        <section id="browser">
+          <h2>The browser version</h2>
+          <p>
+            I had Claude Code port the compiler to TypeScript, one method per assembly procedure, keeping the
+            names, and write an 8086 simulator that runs the assembly it produces. The simulator reads MASM source,
+            not machine code, and implements the registers, all the flags, segments, the stack, and the
+            parts of DOS and the BIOS that small programs use.
+          </p>
+          <p>A port is only useful if it behaves like the original, so the tests compare it with the real thing:</p>
+          <div class="flow" aria-label="How the tests compare the port with the original">
+            <div class="flow-row">
+              <span class="box">.PAS</span><span class="arrow">→</span>
+              <span class="box dos">MAIN.EXE in DOSBox</span><span class="arrow">→</span>
+              <span class="box">.ASM + screen</span><span class="eq">=</span>
+              <span class="box js">TypeScript compiler</span>
+            </div>
+            <div class="flow-row">
+              <span class="box">.ASM</span><span class="arrow">→</span>
+              <span class="box dos">JWasm, .EXE in DOSBox</span><span class="arrow">→</span>
+              <span class="box">screen</span><span class="eq">=</span>
+              <span class="box js">8086 simulator</span>
+            </div>
+          </div>
+          <p>
+            A script runs the original compiler in a headless DOSBox on every example and test program, including
+            the ones with errors, and records the <code>.ASM</code> it writes and its last screen. When a program has
+            a file of test keys, the script also assembles it, runs it, types the keys and records the screen it
+            ends on. The tests check the TypeScript compiler against the first recording, byte for byte. They check
+            the simulator against the second: given the same keys, it has to end on the same screen as DOSBox.
+          </p>
+          <p>
+            The source is on <a href="https://github.com/lordalcol/pseudo-pascal-8086">GitHub</a>, with
+            instructions for running the original in DOSBox.
+          </p>
+          <p class="download">
+            <a class="btn primary" href="./">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>
+              Open the compiler
+            </a>
+          </p>
+        </section>
+      </article>
+    </div>
+
+    <footer class="footer">
+      <p>
+        Written in 8086 assembly by <a href="https://lorenzodalcol.com/personal-projects">Lorenzo Dal Col</a> in 2006, restored and
+        ported to JavaScript in 2026.
+      </p>
+    </footer>
+  </body>
+</html>
