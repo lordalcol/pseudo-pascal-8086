@@ -194,7 +194,7 @@ begin
         mov b, ax
     endmasm
 end.</code></pre>
-          <p>The compiler is one pass, recursive descent, after Jack Crenshaw's <a href="https://compilers.iecc.com/crenshaw/">Let's Build a Compiler</a>. The code it writes is a simple stack machine: <code>AX</code> holds the value being computed, and <code>PUSH AX</code> / <code>POP BX</code> keep the operands.</p>
+          <p>It's a single-pass recursive descent compiler, after Jack Crenshaw's <a href="https://compilers.iecc.com/crenshaw/">Let's Build a Compiler</a>, with no syntax tree: the parser emits assembly as it goes. The code treats the 8086 as an accumulator machine with a stack: <code>AX</code> is the accumulator, and <code>PUSH AX</code> / <code>POP BX</code> hold the left operand of each binary operator. <a href="how-it-works.html" data-page="how-it-works.html">How it works</a>.</p>
         </div>
       </div>
     </dialog>

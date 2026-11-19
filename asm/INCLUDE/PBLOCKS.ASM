@@ -1,6 +1,7 @@
 ;=============================================================================
-; THE PARSER: one procedure per grammar rule, calling each other
-; recursively, and calling the code generator as they go.
+; THE PARSER: predictive recursive descent, one procedure per nonterminal.
+; The procedures call each other as the productions do, and call the code
+; generator as they recognise each construct (syntax-directed translation).
 ;
 ;   <bool_expr>   ::= <bool_term> (('|' | '~') <bool_term>)*
 ;   <bool_term>   ::= <not_factor> ('&' <not_factor>)*

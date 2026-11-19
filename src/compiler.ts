@@ -61,7 +61,9 @@ class Compiler {
   private readonly src: Uint8Array;
   private pos = 0;
   private look = 0;
+  /** Token type: one letter, as in the assembly. */
   private token = '';
+  /** Lexeme of the current token. */
   private value = '';
   private tmpValue = '';
   private label1 = '';

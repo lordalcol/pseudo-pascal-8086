@@ -57,10 +57,10 @@ for (const pre of document.querySelectorAll<HTMLPreElement>('pre[data-compile]')
 // ------------------------------------------------------------------ tokens
 
 const TOKENS: [string, string][] = [
-  ['x', 'a name'], ['#', 'a number or a character'], ['$', 'a string name'], ['v', 'VAR'], ['A', 'ARRAY'],
-  ['i', 'IF'], ['l', 'ELSE'], ['w', 'WHILE'], ['L', 'LOOP'], ['e', 'any END...'], ['R', 'READ'],
+  ['x', 'identifier'], ['#', 'integer or character literal'], ['$', 'string constant identifier'], ['v', 'VAR'], ['A', 'ARRAY'],
+  ['i', 'IF'], ['l', 'ELSE'], ['w', 'WHILE'], ['L', 'LOOP'], ['e', 'END, ENDIF, ENDWHILE, ENDLOOP'], ['R', 'READ'],
   ['W', 'WRITE'], ['J', 'READINT'], ['I', 'WRITEINT'], ['S', 'WRITESTR'], ['N', 'NEWLINE'], ['m', 'MASM'],
-  ['M', 'ENDMASM'], ['+ - * / ( ) ...', 'operators: the character itself'],
+  ['M', 'ENDMASM'], ['+ - * / ( ) ...', 'operators and punctuation: the character itself'],
 ];
 $('tokens').innerHTML = TOKENS.map(([t, what]) => `<div><code>${esc(t)}</code><span>${esc(what)}</span></div>`).join('');
 

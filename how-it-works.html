@@ -41,11 +41,12 @@
           <li><a href="#project">The 2006 project</a></li>
           <li><a href="#path">From Pascal to assembly</a></li>
           <li><a href="#language">The language</a></li>
-          <li><a href="#scanner">The scanner</a></li>
-          <li><a href="#parser">The parser</a></li>
-          <li><a href="#codegen">The code it writes</a></li>
-          <li><a href="#strings">A string stack</a></li>
-          <li><a href="#control">IF and WHILE</a></li>
+          <li><a href="#scanner">Lexical analysis</a></li>
+          <li><a href="#symbols">The symbol table</a></li>
+          <li><a href="#parser">Parsing</a></li>
+          <li><a href="#codegen">Code generation</a></li>
+          <li><a href="#strings">A semantic stack</a></li>
+          <li><a href="#control">Control flow</a></li>
           <li><a href="#limits">What it can't do</a></li>
           <li><a href="#restoration">The 2026 restoration</a></li>
           <li><a href="#browser">The browser version</a></li>
@@ -148,29 +149,49 @@ end.</pre>
         </section>
 
         <section id="scanner">
-          <h2>The scanner</h2>
+          <h2>Lexical analysis</h2>
           <p>
-            The scanner reads the source one character at a time into <code>Look</code>, the lookahead character.
-            <code>pNext</code> skips spaces and comments, looks at the first character, and reads a whole token:
-            a name, a number, a character constant like <code>'a'</code>, a string name like <code>$hello</code>,
-            or a single operator character. It leaves the text in <code>Value</code> and a one-letter code in
-            <code>Token</code>.
+            The scanner (the lexer) reads the source one character at a time into <code>Look</code>, a single
+            character of lookahead. <code>pNext</code> skips white space and comments, looks at the next character
+            to decide what kind of token starts there, and reads the whole token: an identifier, an integer literal,
+            a character literal like <code>'a'</code>, a string constant identifier like <code>$hello</code>, or an
+            operator. It leaves the lexeme, the token's text, in <code>Value</code> and the token type, a single
+            letter, in <code>Token</code>.
           </p>
           <pre class="code" data-proc="PGENERAL.ASM:pNext"></pre>
           <p>
-            A name becomes a keyword only when the parser asks: where a statement or a declaration can start,
-            <code>pScan</code> looks the name up in the keyword list and replaces the <code>x</code> with the
-            keyword's letter. Inside an expression nobody asks, and every word is read as a name.
+            Every operator is a one-character token: <code>&lt;=</code> reaches the parser as <code>&lt;</code>
+            followed by <code>=</code>, and the parser puts the two together. Keywords aren't recognised by the
+            lexer either. Where a statement or a declaration can start, the parser calls <code>pScan</code>, which
+            looks the identifier up in the table of reserved words and replaces the token type <code>x</code> with
+            the keyword's letter. Inside an expression nobody calls it, and every word is an identifier.
           </p>
           <div class="token-table" id="tokens"></div>
         </section>
 
-        <section id="parser">
-          <h2>The parser</h2>
+        <section id="symbols">
+          <h2>The symbol table</h2>
           <p>
-            The parser is recursive descent: one procedure per grammar rule, and the procedures call each other
-            the way the rules refer to each other. There is no syntax tree. Each procedure writes its assembly as
-            soon as it has recognised its piece, so the compiler makes one pass over the source.
+            Declarations come first, between <code>program</code> and <code>begin</code>. Each one adds an entry
+            to the symbol table, a fixed array of 100 entries of 16 bytes, and writes the storage for it into the
+            data segment of the output (<code>NAME dw 0</code>, <code>NAME dw 10 dup(0)</code>, or
+            <code>$NAME db "text",0</code>). Identifiers are significant up to 15 characters.
+          </p>
+          <p>
+            The table is only used for two semantic checks: a declared name can't be declared again, and a name
+            used in a statement must have been declared. There are no types to check. Every variable is a 16-bit
+            word, and the table doesn't stop you using an array as a scalar.
+          </p>
+        </section>
+
+        <section id="parser">
+          <h2>Parsing</h2>
+          <p>
+            The parser is a predictive recursive descent parser: one procedure for each nonterminal of the
+            grammar, calling each other the way the productions refer to each other, and choosing what to parse
+            next from the current token, without backtracking. There is no abstract syntax tree and no
+            intermediate representation. Each procedure emits its assembly as soon as it has recognised its part
+            of the input, which is syntax-directed translation in one pass.
           </p>
           <pre class="code grammar">&lt;bool_expr&gt;   ::= &lt;bool_term&gt; (('|' | '~') &lt;bool_term&gt;)*
 &lt;bool_term&gt;   ::= &lt;not_factor&gt; ('&amp;' &lt;not_factor&gt;)*
@@ -181,20 +202,24 @@ end.</pre>
 &lt;factor&gt;      ::= &lt;number&gt; | 'c' | &lt;variable&gt; | &lt;array&gt; '[' &lt;bool_expr&gt; ']'
                 | '(' &lt;bool_expr&gt; ')'</pre>
           <p>
-            Precedence comes from the nesting: <code>*</code> binds tighter than <code>+</code> because
-            <code>pTerm</code> is called from inside <code>pExpression</code>. Here is <code>pExpression</code>,
-            the rule for <code>+</code> and <code>-</code>:
+            The grammar has one nonterminal per precedence level, so precedence comes from the nesting:
+            <code>*</code> binds tighter than <code>+</code> because <code>pExpression</code> calls
+            <code>pTerm</code> for its operands. The repetitions in the productions are loops in the code, which
+            makes the binary operators left-associative. Here is <code>pExpression</code>, for <code>+</code> and
+            <code>-</code>:
           </p>
           <pre class="code" data-proc="PBLOCKS.ASM:pExpression"></pre>
         </section>
 
         <section id="codegen">
-          <h2>The code it writes</h2>
+          <h2>Code generation</h2>
           <p>
-            The output is code for a stack machine. <code>AX</code> holds the value being computed. Before the
-            right side of an operator is computed, <code>PUSH AX</code> saves the left side, and the operator
-            ends with <code>POP BX</code> and an instruction that combines the two. It's not fast code, but it's
-            correct for any nesting, and the code generator stays tiny.
+            The code generator treats the 8086 as an accumulator machine with a stack. <code>AX</code> is the
+            accumulator and holds the value of the expression being evaluated. Before the right operand of a binary
+            operator is evaluated, <code>PUSH AX</code> saves the left one on the hardware stack, and the operator
+            ends with <code>POP BX</code> and an instruction that combines the two. There is no register allocation
+            and no optimisation pass, so the code is slow, but it's correct for expressions of any depth and the
+            code generator stays tiny.
           </p>
           <p>Type an assignment and step through what it compiles to:</p>
           <div class="stepper" id="stepper">
@@ -224,25 +249,28 @@ end.</pre>
             <code>XCHG</code> first.
           </p>
           <p>
-            Comparisons are where the 8086 shows its age. It has no instruction that turns a comparison into a
-            0 or 1, so the generated code calls small routines, <code>SETE</code>, <code>SETL</code> and the
-            others in <code>RUNTIME.ASM</code>, that leave 1 or 0 in <code>AX</code>. Then <code>&amp;</code>,
-            <code>|</code> and <code>!</code> are plain <code>AND</code>, <code>OR</code> and <code>NOT</code>
-            on those values, and an <code>if</code> only has to test bit 0.
+            Relational operators are where the 8086 shows its age. It has no instruction that turns the flags of a
+            comparison into a 0 or 1, so the generated code calls small routines in the runtime library,
+            <code>SETE</code>, <code>SETL</code> and the others in <code>RUNTIME.ASM</code>, that leave 1 or 0 in
+            <code>AX</code>. Boolean expressions are then evaluated in full, without short-circuiting:
+            <code>&amp;</code>, <code>|</code> and <code>!</code> are plain <code>AND</code>, <code>OR</code>
+            and <code>NOT</code> on those values, and a condition only has to test bit 0.
           </p>
         </section>
 
         <section id="strings">
-          <h2>A string stack</h2>
+          <h2>A semantic stack</h2>
           <p>
-            Recursion needs memory per call. When <code>pFactor</code> sees a name, it can't write
-            <code>MOV AX, name</code> yet: it has to look at the next token first, to see whether a <code>[</code>
-            follows and the name is an array. But reading the next token overwrites <code>Value</code>, and the
-            index expression inside the brackets can contain more names, each read into <code>Value</code> again.
+            Each procedure of a recursive descent parser needs its own copy of some values while the procedures it
+            calls run. When <code>pFactor</code> sees an identifier, it can't emit <code>MOV AX, name</code> yet:
+            it has to read the next token to see whether a <code>[</code> follows and the identifier is an array.
+            Reading the next token overwrites <code>Value</code>, and the index expression inside the brackets can
+            contain more identifiers, each read into <code>Value</code> again.
           </p>
           <p>
-            In Pascal a local variable solves this. In assembly I wrote <code>PushString</code> and
-            <code>PopString</code>, which keep whole strings on the 8086 stack. The catch is that the procedure's
+            In Pascal a local variable does it. In assembly I wrote <code>PushString</code> and
+            <code>PopString</code>, which keep whole strings on the 8086 stack: in compiler terms, a small semantic
+            stack for the attributes (names and labels) a procedure needs after the ones it called have returned. The catch is that the procedure's
             own return address is on top of the stack, so <code>PushString</code> pops it first, pushes the string
             one character per word, and puts the return address back on top before returning:
           </p>
@@ -254,11 +282,13 @@ end.</pre>
         </section>
 
         <section id="control">
-          <h2>IF and WHILE</h2>
+          <h2>Control flow</h2>
           <p>
             A WHILE needs two labels: one at the test, to jump back to, and one after the loop, to leave. The
-            8086's conditional jumps only reach 128 bytes either way, and a loop body is usually longer, so the
-            condition jumps over a <code>JMP</code> that can go anywhere:
+            compiler makes up both names before it parses the loop, and the assembler resolves the forward
+            reference to the second one, so the compiler never has to go back and patch a jump address
+            (backpatching). The 8086's conditional jumps only reach 128 bytes either way, and a loop body is
+            usually longer, so the condition jumps over a <code>JMP</code> that can go anywhere:
           </p>
           <div class="side-by-side">
             <pre class="code" data-source>while i &lt; 10
@@ -276,9 +306,13 @@ endwhile</pre>
             The last slide listed the limits. Floating point would have meant doubling every integer routine.
             Arrays have one dimension. The hardest one to fix was procedures and functions: they need local and
             global variables, parameters passed by value and by reference, and memory allocated on the stack for
-            recursive calls, which would have changed the core of the compiler. Programs can still drop into
-            assembly with <code>masm</code> ... <code>endmasm</code> for anything the language lacks, as the
+            recursive calls, which would have changed the core of the compiler. Programs can still use inline
+            assembly, <code>masm</code> ... <code>endmasm</code>, for anything the language lacks, as the
             guessing game example does to read the BIOS clock.
+          </p>
+          <p>
+            Two more, in compiler terms: there is no type checking, and there is no error recovery. The compiler
+            reports the first error, with its line, and stops.
           </p>
         </section>
 

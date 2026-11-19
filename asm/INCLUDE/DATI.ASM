@@ -36,7 +36,7 @@ KWlist          db      'IF',0, 'ELSE',0, 'ENDIF',0, 'WHILE',0, 'ENDWHILE',0
                 db      'READ',0, 'WRITE',0, 'VAR',0, 'END',0, 'WRITEINT',0
                 db      'READINT',0, 'MASM',0, 'ENDMASM',0, 'NEWLINE',0
                 db      'LOOP',0,'ENDLOOP',0, 'WRITESTR',0, 'ARRAY',0
-; one-letter token for each keyword above; 'x' (position 0) = plain identifier
+; token type for each reserved word above; 'x' (position 0) = identifier
 KWcode          db      'xileweRWveIJmMNLeSA'
 ;=============================================================================
 ;========================== GLOBAL STATE =====================================
@@ -44,8 +44,8 @@ LCount          dw      0               ;next label number
 NEntry          dw      0               ;symbols in the table
 NLine           dw      1               ;current source line
 Look            db      0               ;lookahead character
-Token           db      0               ;one-letter code of the current token
-Value           db      MaxName+1 DUP(0) ;text of the current token
+Token           db      0               ;token type of the current token
+Value           db      MaxName+1 DUP(0) ;lexeme of the current token
 TmpValue        db      MaxName+1 DUP(0)
 sLabel1         db      8 DUP(0)
 sLabel2         db      8 DUP(0)

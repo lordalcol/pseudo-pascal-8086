@@ -43,9 +43,9 @@ Keywords are case-insensitive, `;` starts a comment, and every block has its own
 
 ## How it works
 
-The compiler is a one-pass recursive descent compiler, after Jack Crenshaw's [Let's Build a Compiler](https://compilers.iecc.com/crenshaw/). The scanner reads the source one character at a time and turns each word into a one-letter token (`x` for a name, `#` for a number, `i` for IF, `w` for WHILE...). One procedure per grammar rule parses the program and writes the assembly as it goes, so there is no syntax tree.
+It's a single-pass compiler that does syntax-directed translation, after Jack Crenshaw's [Let's Build a Compiler](https://compilers.iecc.com/crenshaw/). The lexer reads the source one character at a time and gives each token a one-letter token type (`x` for an identifier, `#` for an integer or character literal, `i` for IF, `w` for WHILE...), with the lexeme alongside. A predictive recursive descent parser, one procedure per nonterminal, emits the assembly as it recognises each construct: there is no abstract syntax tree and no intermediate representation. The symbol table is used only to catch undeclared and duplicate identifiers; every variable is a 16-bit word, so there is no type checking.
 
-The generated code is a stack machine: `AX` holds the value being computed, `PUSH AX` saves the left operand and `POP BX` takes it back. `a = b + 1` becomes:
+Code generation treats the 8086 as an accumulator machine with a stack: `AX` is the accumulator, `PUSH AX` saves the left operand of a binary operator while the right one is evaluated, and `POP BX` takes it back. There is no register allocation or optimisation. `a = b + 1` becomes:
 
 ```asm
 MOV AX, B
@@ -56,9 +56,9 @@ ADD AX,BX
 MOV A, AX           ;store
 ```
 
-The 8086 has no `SETcc` instructions, so comparisons call small routines (`SETE`, `SETL`...) that leave 1 or 0 in `AX`. Conditional jumps on the 8086 only reach 128 bytes, so every branch is a short jump over a long one.
+The 8086 has no `SETcc` instructions, so relational operators call small runtime routines (`SETE`, `SETL`...) that leave 1 or 0 in `AX`, and boolean operators are evaluated in full, without short-circuiting. Jump targets are symbolic labels named before the code that uses them, and the assembler resolves the forward references, so there is no backpatching. Conditional jumps on the 8086 only reach 128 bytes, so every branch is a short jump over a long one.
 
-Writing a recursive descent parser in assembly needs somewhere to keep names and labels while the procedures call each other. `PushString` and `PopString` keep them on the stack: they take the return address off, push or pop the string one character per word, and put the return address back.
+Writing a recursive descent parser in assembly needs a semantic stack, to keep identifiers and labels while the parsing procedures call each other. `PushString` and `PopString` keep them on the 8086 stack: they take the return address off, push or pop the string one character per word, and put the return address back.
 
 ## What's in here
 

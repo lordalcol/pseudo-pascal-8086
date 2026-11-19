@@ -1,11 +1,11 @@
 ;=============================================================================
-; GENERAL PROCEDURES: the scanner, the symbol table, the declarations,
-; keyword lookup, file names and start-up.
+; GENERAL PROCEDURES: the lexer (scanner), the symbol table, the
+; declarations, reserved word lookup, file names and start-up.
 ;
-; The scanner leaves the text of each token in Value and a one-letter code
-; in Token: 'x' identifier, '#' number or character constant, '$' string
-; constant, a keyword letter from KWcode (after pScan), or the operator
-; character itself.
+; The lexer leaves the lexeme of each token in Value and its token type, one
+; letter, in Token: 'x' identifier, '#' integer or character literal, '$'
+; string constant identifier, a keyword letter from KWcode (after pScan), or
+; the operator character itself.
 ;=============================================================================
 pGENERALS    SEGMENT PARA PUBLIC 'CODE'
              ASSUME  CS:pGENERALS
