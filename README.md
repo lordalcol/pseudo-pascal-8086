@@ -2,7 +2,7 @@
 
 A compiler for a small Pascal-like language, written in 8086 assembly in 2006. It reads a `.PAS` file and writes MASM assembly for DOS: the output assembles with MASM or [JWasm](https://github.com/Baron-von-Riedesel/JWasm) and runs as a DOS `.EXE`.
 
-In 2026 I restored it with Claude Code. It builds and runs in DOSBox again after ten bug fixes, and a JavaScript port runs it in the browser.
+In 2026 I restored it. It builds and runs in DOSBox again after ten bug fixes, and a JavaScript port runs it in the browser.
 
 **[Try it in the browser](https://lorenzodalcol.com/personal-projects/compiler/)**: write a program, see the assembly the compiler writes, and run it on a simulated 8086 with a DOS screen, registers, flags and variables. Step through it one instruction at a time and the matching source line lights up.
 

@@ -57,8 +57,8 @@
         <h1 class="doc-title">How it works</h1>
         <p class="lead">
           I wrote this compiler in 2006 as an exam project: a compiler for a small Pascal-like language, written
-          entirely in 8086 assembly, that writes 8086 assembly for MASM. In 2026 I found the archive and, with Claude
-          Code, got it running again, in DOS and in the browser. This page explains how it works, with the real code.
+          entirely in 8086 assembly, that writes 8086 assembly for MASM. In 2026 I found the archive and got it running
+          again, in DOS and in the browser. This page explains how it works, with the real code.
         </p>
 
         <section id="project">
@@ -320,7 +320,7 @@ endwhile</pre>
           <h2>The 2026 restoration</h2>
           <p>
             The archive had the sources, the 2006 <code>MAIN.EXE</code>, copies of MASM and LINK, and several
-            backup folders. I did the restoration with Claude Code. The first surprise was that the 2006
+            backup folders. The first surprise was that the 2006
             <code>MAIN.EXE</code> doesn't work in DOSBox either: it can't open its input file. These are the bugs that were
             fixed:
           </p>
@@ -348,8 +348,8 @@ endwhile</pre>
         <section id="browser">
           <h2>The browser version</h2>
           <p>
-            I had Claude Code port the compiler to TypeScript, one method per assembly procedure, keeping the
-            names, and write an 8086 simulator that runs the assembly it produces. The simulator reads MASM source,
+            The compiler is ported to TypeScript, one method per assembly procedure, keeping the names, and an
+            8086 simulator runs the assembly it produces. The simulator reads MASM source,
             not machine code, and implements the registers, all the flags, segments, the stack, and the
             parts of DOS and the BIOS that small programs use.
           </p>
