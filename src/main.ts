@@ -614,6 +614,13 @@ ui.langDialog.addEventListener('click', (e) => {
 
 // ------------------------------------------------------------------ start-up
 
+// On lorenzodalcol.com the app is served at /personal-projects/compiler, without
+// a trailing slash, so relative links would point one folder up. The build sets
+// BASE_URL to the absolute folder there.
+for (const a of document.querySelectorAll<HTMLAnchorElement>('a[data-page]')) {
+  a.href = import.meta.env.BASE_URL + a.dataset.page;
+}
+
 applyTheme((store.get('theme') as Theme | null) ?? 'system');
 const savedSpeed = store.get('speed');
 if (savedSpeed && [...ui.speed.options].some((o) => o.value === savedSpeed)) ui.speed.value = savedSpeed;
