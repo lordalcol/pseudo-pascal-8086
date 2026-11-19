@@ -1,4 +1,4 @@
-// The "How it was built" page: code excerpts straight from the assembly
+// The "How it works" page: code excerpts straight from the assembly
 // sources, output from the real compiler port, and a stepper that runs the
 // code an expression compiles to.
 import '@fontsource-variable/inter';

@@ -1,4 +1,4 @@
-# Pseudo-Pascal 8086
+# Pseudo-Pascal to ASM compiler, written in ASM
 
 A compiler for a small Pascal-like language, written in 8086 assembly in 2006. It reads a `.PAS` file and writes MASM assembly for DOS: the output assembles with MASM or [JWasm](https://github.com/Baron-von-Riedesel/JWasm) and runs as a DOS `.EXE`.
 
