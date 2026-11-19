@@ -1,0 +1,6 @@
+*.ASM text eol=crlf
+*.asm text eol=crlf
+*.PAS text eol=crlf
+*.pas text eol=crlf
+*.BAT text eol=crlf
+*.pdf binary
