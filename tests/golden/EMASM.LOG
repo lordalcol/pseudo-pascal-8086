@@ -1,0 +1,8 @@
+Pseudo-Pascal to 8086 assembly compiler - Lorenzo Dal Col, 2006
+1: program
+2:     var a
+3: begin
+4:     masm
+5:         mov ax,1
+6:
+[LINE: 6] Error: ENDMASM Expected

@@ -1,0 +1,5 @@
+program
+    var a
+begin
+    a = 3 * )
+end.

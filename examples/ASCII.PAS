@@ -1,13 +1,15 @@
 program
     var key
-    $titolo = "Visualizza il numero ASCII decimale del tasto premuto"
+    $title = "Press keys to see their ASCII codes. Esc quits."
 begin
-    writeStr($titolo)
+    writeStr($title)
     newline
     newline
     read(key)
-    write(key,':',' ')
-    writeInt(key)
-    write(10)
-    read(key)
+    while key <> 27
+        write(key,':',' ')
+        writeInt(key)
+        newline
+        read(key)
+    endwhile
 end.

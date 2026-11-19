@@ -1,0 +1,7 @@
+Pseudo-Pascal to 8086 assembly compiler - Lorenzo Dal Col, 2006
+1: program
+2:     var a
+3: begin
+4:     a = 1
+5:     b
+[LINE: 5] Error: B Undefined symbol

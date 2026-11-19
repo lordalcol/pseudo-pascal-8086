@@ -1,95 +1,105 @@
 ;=============================================================================
-; Le seguenti procedure vengono chiamate quando si verifica un errore durante
-; la compilazione o l'IO files.
-; Gli errori di compilazione vengono visualizzati in modo dinamico, essi
-; visualizzano il numero della riga e la parola chiave che crea il problema
-; Le stringhe costanti vengono ricavate dal segmento dei DATI
+; ERRORS. Called when compiling or file I/O fails. Compile errors show the
+; source line and the word that caused them, then stop the compiler with
+; exit code 1 and delete the incomplete output file.
 ;=============================================================================
 wErrorS         SEGMENT PARA PUBLIC 'CODE'
              ASSUME  CS:wErrorS
 ;
-; displays a general error with line number and halts the program
+; Closes the files and starts the message: "[LINE: n] Error: "
 wError   PROC    FAR
            push ax
            push si
-           call far ptr pTerminate      ;conclude la scrittura e chiude i files
-           pop si
+           push di
+           call far ptr pTerminate      ;flush and close the files
+           mov  ah,41h                  ;delete the incomplete output file
+           lea  dx,WriteFileName
+           int  21h
            call NEW_LINE
-           mov  al,TAB
-           call CHAR_OUT
-           push si
            lea  si,sErrLineNumber
            call DSP_STR
            mov  ax,NLine
-           call Wor2Dec                 ;visualizzo il numero della riga
+           call Wor2Dec                 ;line number
            lea  si,sErrError
-           call DSP_STR                 ;visualizzo la stringa statica ERROR:
-           pop si
+           call DSP_STR
+           pop  di
+           pop  si
            pop  ax
            ret
 wError   ENDP
 ;
-; displays an error "EXPECTED something"
+; "<SI> Expected"
 ErrExpected   PROC    FAR
-           call wError                  ;chiamo il generico errore
-           call DSP_STR                 ;visualizzo il VALUE in questione
+           call wError
+           call DSP_STR                 ;what was expected
            lea si,sErrExpected
            call DSP_STR
-           jmp DOS
+           jmp DOS_ERR
 ErrExpected   ENDP
 ;
-; displays an error DUPLICATE SYMBOL
+; "<DI> Duplicated symbol declaration"
 ErrDuplicate   PROC    FAR
-           call wError                  ;chiamo il generico errore
-           call DSP_STR                 ;visualizzo il VALUE in questione
+           call wError
+           mov  si,di
+           call DSP_STR                 ;the symbol
            lea si,sErrDuplicate
            call DSP_STR
-           jmp DOS
+           jmp DOS_ERR
 ErrDuplicate   ENDP
 ;
-; displays an error UNDEFINED symbol
+; "<DI> Undefined symbol"
 ErrUndefined   PROC    FAR
-           call wError                  ;chiamo il generico errore
-           call DSP_STR                 ;visualizzo il VALUE in questione
+           call wError
+           mov  si,di
+           call DSP_STR                 ;the symbol
            lea si,sErrUndefined
            call DSP_STR
-           jmp DOS
+           jmp DOS_ERR
 ErrUndefined   ENDP
 ;
-; displays an error "TABLE FULL"
+; "<DI> Table of symbols is FULL"
 ErrTableFull   PROC    FAR
-           call wError                  ;chiamo il generico errore
-           call DSP_STR                 ;visualizzo il VALUE in questione
-           lea si,sErrTableFull         ;la tabella dei simboli è PIENA
+           call wError
+           mov  si,di
+           call DSP_STR                 ;the symbol
+           lea si,sErrTableFull
            call DSP_STR
-           jmp DOS
+           jmp DOS_ERR
 ErrTableFull   ENDP
+;
+; "Unexpected end of file"
+ErrEOF     PROC    FAR
+           call wError
+           lea si,sErrEOF
+           call DSP_STR
+           jmp DOS_ERR
+ErrEOF     ENDP
 ;=============================================================================
-; ERRORI VARI NELL' I/O FILE
+; FILE I/O ERRORS
 ;=============================================================================
 ErrFOpen   PROC    FAR
            lea si,sErrFOpen
            call DSP_STR
-           jmp DOS
+           jmp DOS_ERR
 ErrFOpen   ENDP
 ErrFRead   PROC    FAR
            lea si,sErrFRead
            call DSP_STR
-           jmp DOS
+           jmp DOS_ERR
 ErrFRead   ENDP
 ErrFWrite  PROC    FAR
            lea si,sErrFWrite
            call DSP_STR
-           jmp DOS
+           jmp DOS_ERR
 ErrFWrite  ENDP
 ErrFClose   PROC    FAR
            lea si,sErrFClose
            call DSP_STR
-           jmp DOS
+           jmp DOS_ERR
 ErrFClose   ENDP
 ErrFCreate PROC    FAR
            lea si,sErrFCreate
            call DSP_STR
-           jmp DOS
+           jmp DOS_ERR
 ErrFCreate ENDP
-wErrorS      ENDS
+wErrorS    ENDS

@@ -1,0 +1,25 @@
+9:     writeStr($title)
+10:     newline
+11:     count = 0
+12:     i = 2
+13:     while i < n
+14:         if sieve[i] = 0
+15:             writeInt(i)
+16:             write(' ')
+17:             count = count + 1
+18:             ; cross out the multiples, starting from i*i
+19:             if i <= n / i
+20:                 j = i * i
+21:                 while j < n
+22:                     sieve[j] = 1
+23:                     j = j + i
+24:                 endwhile
+25:             endif
+26:         endif
+27:         i = i + 1
+28:     endwhile
+29:     newline
+30:     writeStr($total)
+31:     writeInt(count)
+32: end.
+33:

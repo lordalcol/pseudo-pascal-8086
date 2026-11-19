@@ -1,0 +1,25 @@
+44:                 if v[i] > 20
+45:                     write('#')
+46:                 else
+47:                     write('+')
+48:                 endif
+49:             endif
+50:         endif
+51:         i = i + 1
+52:     endwhile
+53:     newline
+54:     writeInt(v[v[3] + 9 - (-1)]) ; v[4] = -4
+55:     newline
+56:     i = 0
+57:     loop 3
+58:         if i = 1
+59:             write('b')
+60:         else
+61:             write('a')
+62:         endif
+63:         i = i + 1
+64:     endloop
+65:     newline
+66:     writeStr($done, $sep, $done)
+67: end.
+68:

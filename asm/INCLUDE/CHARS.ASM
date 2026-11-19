@@ -1,6 +1,8 @@
 ;=============================================================================
-; RICONOSCIMENTO CARATTERI: isAlpha, isNum, isAlNum, isOp, isRelOp, ecc.
-; GESTIONE STRINGHE: strcmp, strcpy, PushString, PopString
+; CHARACTER CLASSES: isAlpha, isDigit, isAlNum, isWhite, isAddop, isRelOp...
+; STRINGS: strcmp, strcpy, ToUpper, PushString, PopString
+; IsAlpha, IsDigit, IsAlNum, strcmp, StrCpy and ToUpper come from the UCR
+; Standard Library for 80x86 assembly (Randy Hyde, public domain).
 ;=============================================================================
 CHARSS      SEGMENT PARA PUBLIC 'CODE'
              ASSUME  CS:CHARSS
@@ -58,7 +60,7 @@ IsAN:		cmp	al, al
 NotAN:		ret
 IsAlNum         endp
 ;
-; isWhite 	Controlla se il carattere è uno spazio vuoto
+; isWhite	Is AL white space? The comment character ';' counts too.
 ;
 IsWhite         proc	far
 		cmp	al, ' '
@@ -78,7 +80,7 @@ ItIsWhite:
                 ret
 IsWhite         endp
 ;
-; isEndBlock 	Controlla se il token è "fine blocco"
+; isEndBlock	Does the token in AL end a block (ENDxxx, END, ELSE)?
 ;
 isEndBlock         proc	far
 		cmp	al, 'e'
@@ -91,7 +93,7 @@ ItisEndBlock:
                 ret
 isEndBlock         endp
 ;
-; isOrOp 	Recognize a Boolean Orop
+; isOrOp	Recognize a Boolean OR operator: | (or), ~ (xor)
 ;
 isOrOp         proc	far
 		cmp	al, '|'
@@ -104,7 +106,7 @@ ItisOrOp:
                 ret
 isOrOp         endp
 ;
-; isAddOp 	Recognize an Add operation
+; isAddOp	Recognize an add operator: + -
 ;
 isAddop         proc	far
 		cmp	al, '+'
@@ -117,7 +119,7 @@ ItisAddop:
                 ret
 isAddop         endp
 ;
-; isMulOp 	Recognize an multiplication
+; isMulOp	Recognize a multiply operator: * /
 ;
 isMulOp         proc	far
 		cmp	al, '*'
@@ -130,7 +132,7 @@ ItisMulOp:
                 ret
 isMulOp         endp
 ;
-; isRelOp 	Recognize a relation
+; isRelOp	Recognize a relational operator: = < >
 ;
 isRelOp         proc	far
 		cmp	al, '='
@@ -265,7 +267,7 @@ DidByte:	pop	si
 		ret
 StrCpy          endp
 ;
-;       trasforma AL in UPPERCASE
+;       Converts AL to upper case
 ;
 ToUpper	proc	far
 		cmp	al, 'a'			;See if we've got a
@@ -276,23 +278,24 @@ ToUpper	proc	far
 NotLower:	ret
 ToUpper	endp
 ;=============================================================================
-; PushString e PopString eseguono il Push e il Pop di una stringa contenuta
-; in SI.
-; E' necessario eliminare dalla pila le due word di ritorno della procedura,
-; inserire in pila la stringa, quindi reinserire in pila gli indirizzi CS,IP
+; PushString and PopString push and pop the zero-terminated string at SI on
+; the stack, one character per word. The parser uses them as a string stack
+; (names, labels) while it recurses. Both take the return address off the
+; stack first and put it back on top before returning.
+; They change AX, BX (Push), CX (Pop), DX and DI (Pop).
 ;=============================================================================
 PushString proc   far
-                pop bx  ;salvo 16 bit offset of the next instruction following the call
-                pop dx  ;salvo il puntatore per il ritorno
+                pop bx  ;return offset
+                pop dx  ;return segment
                 mov cx,0
                 mov ah,0
-PushStringCount:
+PushStringCount:                ;find the end of the string
                 cmp byte ptr [si],0
                 je  PushStringWhile
                 inc  si
                 inc cx
                 jmp PushStringCount
-PushStringWhile:
+PushStringWhile:                ;push it backwards, the 0 first
                 mov al,byte ptr [si]
                 push ax
                 cmp cx,0
@@ -301,16 +304,16 @@ PushStringWhile:
                 dec  cx
                 jmp PushStringWhile
 PushStringEND:
-                push dx  ;rimetto il puntatore per il ritorno
-                push bx  ;rimpiazzo 16 bit offset of the next instruction following the call    
+                push dx  ;return segment
+                push bx  ;return offset
                 ret
 PushString endp
-
+;
 PopString proc   far
-                pop cx  ;salvo 16 bit offset of the next instruction following the call
-                pop dx  ;salvo il puntatore per il ritorno
+                pop cx  ;return offset
+                pop dx  ;return segment
                 mov di,si
-PopStringWhile:
+PopStringWhile:                 ;pop characters up to the 0
                 pop ax
                 mov [si],al
                 cmp al,0
@@ -319,8 +322,8 @@ PopStringWhile:
                 jmp PopStringWhile
 PopStringEND:
                 mov si,di
-                push dx  ;rimetto il puntatore per il ritorno
-                push cx  ;rimpiazzo 16 bit offset of the next instruction following the call      
+                push dx  ;return segment
+                push cx  ;return offset
                 ret
 PopString endp
-CHARSS      ENDS 
+CHARSS      ENDS

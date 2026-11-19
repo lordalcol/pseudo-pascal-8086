@@ -1,0 +1,19 @@
+Pseudo-Pascal to 8086 assembly compiler - Lorenzo Dal Col, 2006
+1: program
+2:     var a,b,t
+3:     $title = "The first 23 Fibonacci numbers (the 24th needs more than 16 bit
+s):"
+4: begin
+5:     writeStr($title)
+6:     newline
+7:     a = 0
+8:     b = 1
+9:     loop 23
+10:         writeInt(b)
+11:         write(' ')
+12:         t = a + b
+13:         a = b
+14:         b = t
+15:     endloop
+16: end.
+17:

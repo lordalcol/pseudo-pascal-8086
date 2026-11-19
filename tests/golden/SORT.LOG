@@ -1,0 +1,25 @@
+25:     j=0
+26:     i=1
+27:     while(j<N)
+28:         while(i<N)
+29:             if a[i]<a[j]
+30:                 tmp=a[i]
+31:                 a[i]=a[j]
+32:                 a[j]=tmp
+33:             endif
+34:             i=i+1
+35:         endwhile
+36:         j=j+1
+37:         i=j
+38:     endwhile
+39:     ;print it
+40:     writeStr($output)
+41:     newline
+42:     i=0
+43:     loop N
+44:         writeInt(a[i])
+45:         write(' ')
+46:         i=i+1
+47:     endloop
+48: end.
+49:

@@ -1,21 +1,31 @@
 ;=============================================================================
-; TUTTE LE PROCEDURE PER IL RILEVAMENTO DEI BLOCCHI DI CODICE OPERATIVO
+; THE PARSER: one procedure per grammar rule, calling each other
+; recursively, and calling the code generator as they go.
+;
+;   <bool_expr>   ::= <bool_term> (('|' | '~') <bool_term>)*
+;   <bool_term>   ::= <not_factor> ('&' <not_factor>)*
+;   <not_factor>  ::= ['!'] <relation>
+;   <relation>    ::= <expression> [<relop> <expression>]
+;   <expression>  ::= [<addop>] <term> (<addop> <term>)*
+;   <term>        ::= <factor> (<mulop> <factor>)*
+;   <factor>      ::= <number> | 'c' | <variable> | <array> '[' <bool_expr> ']'
+;                   | '(' <bool_expr> ')'
 ;=============================================================================
 pBlocksS    SEGMENT PARA PUBLIC 'CODE'
              ASSUME  CS:pBlocksS
 ;=============================================================================
-; BLOCCHI GENERICI PER ESPRESSIONI RELAZIONALI (= > < )
+; RELATIONS (= <> < > <= >=)
 ;=============================================================================
 ;
-; Get Another Expression and Compare
+; Parses the right-hand expression and compares it with the saved left one
 ;
 pCompareExpression   PROC    FAR
-            call far ptr pExpression    ;analizzo l'espressione successiva
-            call wPopCompare            ;e la confronto con la precendente
-            ret                         ;salvata nel registro principale
+            call far ptr pExpression
+            call wPopCompare
+            ret
 pCompareExpression   ENDP
 ;
-; Get The Next Expression and Compare
+; Skips the second character of the operator, then as above
 ;
 pNextExpression   PROC    FAR
             call pNext
@@ -23,15 +33,11 @@ pNextExpression   PROC    FAR
             ret
 pNextExpression   ENDP
 ;
-; Recognize and Translate a Relational "Equals"
-;
 pEqual   PROC    FAR
             call pNextExpression
             call wSetEqual
             ret
 pEqual   ENDP
-;
-; Recognize and Translate a Relational "NOT Equals"
 ;
 pNotEqual   PROC    FAR
             call pNextExpression
@@ -39,61 +45,59 @@ pNotEqual   PROC    FAR
             ret
 pNotEqual   ENDP
 ;
-; Recognize and Translate a Relational "Less OR Equals"
-;
 pLessOrEqual   PROC    FAR
             call pNextExpression
             call wSetLessOrEqual
             ret
 pLessOrEqual   ENDP
 ;
-; Recognize and Translate a Relational "Less"
+; < can start <, <= or <>
 ;
 pLess   PROC    FAR
             call pNext
-            mov  al,Token            ;CASE OF:
-            cmp  al,'='              ;controllo se è un <=
+            mov  al,Token
+            cmp  al,'='              ;<=
                 jne  pLessSkip1
                 call pLessOrEqual
                 jmp  pLessEND
 pLessSkip1:
-            cmp  al,'>'              ;controllo se è un <>
+            cmp  al,'>'              ;<>
                 jne  pLessELSE
                 call pNotEqual
                 jmp  pLessEND
 pLessELSE:
-            call pCompareExpression
+            call pCompareExpression  ;<
             call wSetLess
 pLessEND:
             ret
 pLess   ENDP
 ;
-; Recognize and Translate a Relational "Greater"
+; > can start > or >=
 ;
 pGreater   PROC    FAR
             call pNext
             mov  al,Token
-            cmp  al,'='              ;controllo se è un >=
+            cmp  al,'='              ;>=
                 jne  pGreaterELSE
                 call pNextExpression
                 call wSetGreaterOrEqual
                 jmp  pGreaterEND
 pGreaterELSE:
-                call pCompareExpression
+                call pCompareExpression  ;>
                 call wSetGreater
 pGreaterEND:
             ret
 pGreater   ENDP
 ;
-; Parse and Translate a Relation
+; <relation> ::= <expression> [<relop> <expression>]
 ;
 pRelation   PROC    FAR
             call far ptr pExpression
             mov al,Token
-            call isRelop           ;Analizzo una relazione BOOLEANA
-            jnz pRelationEND       ;confrontando tra loro
-            call wPush             ;due espressioni
-            cmp  al,'='            ;CASE OF:
+            call isRelop
+            jnz pRelationEND
+            call wPush             ;save the left side
+            cmp  al,'='
                 jne  pRelationSkip1
                 call pEqual
                 jmp  pRelationEND
@@ -110,18 +114,18 @@ pRelationEND:
             ret
 pRelation   ENDP
 ;=============================================================================
-; BLOCCHI PER ESPRESSIONI MATEMATICHE (FATTORI E TERMINI CON OPERANDI VARI)
+; ARITHMETIC EXPRESSIONS
 ;=============================================================================
 ;
-; Parse and Translate a Boolean Factor with Leading NOT
+; <not_factor> ::= ['!'] <relation>
 ;
 pNotFactor   PROC    FAR
             mov al,Token
-            cmp al,'!'          ;controllo se c'è il simbolo NOT
-            jne pNotFactorElse  ;se c'è allora continuo normalmente
-            call pNext          ;ad analizzare la relazione
-            call pRelation      
-            call wNotIt         ;alla fine faccio il NOT del risultato
+            cmp al,'!'
+            jne pNotFactorElse
+            call pNext
+            call pRelation
+            call wNotIt
             jmp  pNotFactorEND
 pNotFactorElse:
             call pRelation
@@ -129,35 +133,35 @@ pNotFactorEND:
             ret
 pNotFactor   ENDP
 ;
-; Parse and Translate a Math Factor
+; <factor>: a parenthesis, a variable, an array element or a constant
 ;
 pFactor     PROC    FAR
-    mov   al,Token              ;ANALIZZO UN FATTORE MATEMATICO
-    cmp   al,'('                ;se trovo una parentesi
-    jne   pFactorElse1          ;continuo l'analisi...
+    mov   al,Token
+    cmp   al,'('                ;( <bool_expr> )
+    jne   pFactorElse1
         call  pNext
         call  far ptr  pBoolExpression
         lea   si,sParentChiusa
-        call  pMatchString_nx   ;...e mi aspetto una parentesi di chiusura
+        call  pMatchString_nx
         jmp   pFactorEND
 pFactorElse1:
 mov   al,Token
-        cmp   al,'x'            ;se il fattore è una variabile
+        cmp   al,'x'            ;variable or array
         jne   pFactorElse2
             lea   si,Value
-            call  PushString
+            call  PushString    ;keep the name while looking ahead
             call  pNext
             mov   al,Token
-            cmp   al,'['        ;controllo se è un array
+            cmp   al,'['
             je   pFactorElse3
-                lea    si,TmpValue
+                lea    si,TmpValue      ;variable
                 call   PopString
                 mov    di,si
                 call   wLoadVar
                 jmp    pFactorEND
         pFactorElse3:
-                call   pNext    ;analizzo il contenuto dell'indice
-                call   far ptr pBoolExpression  ;dell'array
+                call   pNext            ;array: compute the index
+                call   far ptr pBoolExpression
                 lea    si,sQuadChiusa
                 call   pMatchString_nx
                 lea    si,TmpValue
@@ -167,10 +171,10 @@ mov   al,Token
                 jmp    pFactorEND
     pFactorElse2:
             mov  al,Token
-            cmp  al,'#'         ;se il fattore è un numero
+            cmp  al,'#'         ;number or character constant
             jne  pFactorElse4
                 lea  si,Value
-                call wLoadConst ;lo carico come un immediato
+                call wLoadConst
                 call pNext
                 jmp  pFactorEND
         pFactorElse4:
@@ -180,16 +184,12 @@ pFactorEND:
             ret
 pFactor     ENDP
 ;
-; Multiply
-;
 pMultiply        PROC    FAR
             call pNext
             call pFactor
             call wPopMul
             ret
 pMultiply        ENDP
-;
-; Divide
 ;
 pDivide   PROC    FAR
             call pNext
@@ -198,16 +198,16 @@ pDivide   PROC    FAR
             ret
 pDivide   ENDP
 ;
-; Parse and Translate a Math Term
+; <term> ::= <factor> (<mulop> <factor>)*
 ;
 pTerm   PROC    FAR
             call pFactor
 pTermWhile:
             mov  al,Token
-            call isMulop                ;analizzo le MOLTIPLICAZIONI
+            call isMulop
             jnz  pTermEND
                 call wPush
-                cmp  al,'*'             ;CASE OF:
+                cmp  al,'*'
                    jne  pTermSkip1
                    call pMultiply
                    jmp  pTermWhile
@@ -215,11 +215,10 @@ pTermSkip1:
                 cmp  al,'/'
                    jne  pTermWhile
                    call pDivide
+                   jmp  pTermWhile
 pTermEND:
             ret
 pTerm   ENDP
-;
-; Addition
 ;
 pAdd        PROC    FAR
             call pNext
@@ -228,8 +227,6 @@ pAdd        PROC    FAR
             ret
 pAdd        ENDP
 ;
-; Subtraction
-;
 pSubtract   PROC    FAR
             call pNext
             call pTerm
@@ -237,7 +234,8 @@ pSubtract   PROC    FAR
             ret
 pSubtract   ENDP
 ;
-; Parse and Translate an Expression
+; <expression> ::= [<addop>] <term> (<addop> <term>)*
+; A leading sign works as 0 + term or 0 - term
 ;
 pExpression   PROC    FAR
             mov  al,Token
@@ -246,13 +244,13 @@ pExpression   PROC    FAR
             call wClear
             jmp  pExpressionWhile
 pExpressionElse:
-            call pTerm                 ;recupero un Termine Matematico
+            call pTerm
 pExpressionWhile:
             mov  al,Token
-            call isAddop               ;ANALIZZO LE ADDIZIONI
+            call isAddop
             jnz  pExpressionEND
                 call wPush
-                cmp  al,'+'            ;CASE OF:
+                cmp  al,'+'
                    jne  pExpressionSkip1
                    call pAdd
                    jmp  pExpressionWhile
@@ -260,19 +258,20 @@ pExpressionSkip1:
                 cmp  al,'-'
                    jne  pExpressionWhile
                    call pSubtract
+                   jmp  pExpressionWhile
 pExpressionEND:
             ret
 pExpression   ENDP
 ;=============================================================================
-; BLOCCHI PER LE ESPRESSIONI BOOLEANE ( ! & | ~ )
+; BOOLEAN EXPRESSIONS ( ! & | ~ )
 ;=============================================================================
 ;
-; analizza un termine booleano
+; <bool_term> ::= <not_factor> ('&' <not_factor>)*
 ;
 pBoolTerm   PROC    FAR
             call pNotFactor
 pBoolTermWhile:
-            mov  al,Token               ;analizzo un termine BOOLEANO
+            mov  al,Token
             cmp  al,'&'
             jne  pBoolTermEND
                 call wPush
@@ -284,16 +283,12 @@ pBoolTermEND:
             ret
 pBoolTerm   ENDP
 ;
-; Recognize and Translate a Boolean OR
-;
 pBoolOr   PROC    FAR
             call pNext
             call pBoolTerm
             call wPopOr
             ret
 pBoolOr   ENDP
-;
-; Recognize and Translate a Boolean OR
 ;
 pBoolXOr   PROC    FAR
             call pNext
@@ -302,16 +297,16 @@ pBoolXOr   PROC    FAR
             ret
 pBoolXOr   ENDP
 ;
-; Parse and Translate a Boolean Expression
+; <bool_expr> ::= <bool_term> (('|' | '~') <bool_term>)*
 ;
 pBoolExpression   PROC    FAR
             call pBoolTerm
 pBoolExpressionWhile:
             mov  al,Token
             call isOrOp
-            jnz  pBoolExpressionEND     ;ANALIZZO LE ESPRESSIONI BOOLEANE
+            jnz  pBoolExpressionEND
             call wPush
-           cmp  al,'|'                  ;CASE OF:
+           cmp  al,'|'
                jne  pBoolExpressionSkip1
                call pBoolOr
                jmp  pBoolExpressionWhile
@@ -319,128 +314,148 @@ pBoolExpressionSkip1:
            cmp  al,'~'
                jne  pBoolExpressionWhile
                call pBoolXor
+               jmp  pBoolExpressionWhile
 pBoolExpressionEND:
             ret
 pBoolExpression   ENDP
 ;
-; crea una nuova etichetta univoca
+; Writes a new label "Ln" at SI, n = LCount, and increments LCount
 ;
 pNewLabel   PROC    FAR
             push ax
-            push si                     ;genero un'etichetta in SI
-            mov byte ptr [si],'L'       ;inizia con L
-            mov ax,LCount
-            inc si
-            mov [si],al
-            add byte ptr [si],48        ;segue con un numero univoco...
-            inc si
-            mov byte ptr [si],0
-            pop si
-            pop ax
-            inc LCount                  ;...che viene incrementato
+            push bx
+            push cx
+            push dx
+            push di
+            mov  di,si
+            mov  byte ptr [di],'L'
+            inc  di
+            mov  ax,LCount
+            mov  bx,10
+            xor  cx,cx
+pNewLabelDiv:
+            xor  dx,dx                  ;digits come out last to first
+            div  bx
+            push dx
+            inc  cx
+            test ax,ax
+            jnz  pNewLabelDiv
+pNewLabelPut:
+            pop  dx
+            add  dl,'0'
+            mov  [di],dl
+            inc  di
+            loop pNewLabelPut
+            mov  byte ptr [di],0
+            pop  di
+            pop  dx
+            pop  cx
+            pop  bx
+            pop  ax
+            inc LCount
             ret
 pNewLabel   ENDP
 ;=============================================================================
-; BLOCCHI PER I COSTRUTTI DI LINGUAGGIO
+; CONTROL STRUCTURES
 ;=============================================================================
 ;
-; rileva e analizza un blocco IF ELSE ENDIF
+; IF <bool_expr> <block> [ELSE <block>] ENDIF
 ;
 pDoIf       PROC    FAR
             call  pNext
-            call  pBoolExpression       ;ANALIZZO L'ESPRESSIONE BOOLEANA DELL'IF
+            call  pBoolExpression       ;the condition
             lea   si,sLabel1
-            call  pNewLabel             ;genero la prima etichetta
-            call  PushString            ;push Label1
+            call  pNewLabel             ;Label1
+            call  PushString
             lea   si,sLabel2
             dec   LCount
-            call  pNewLabel             ;genero la seconda etichetta uguale alla prima
-            call  PushString            ;push Label2
-            call  wBranchFalse
-            call  far ptr pBlock_nx     ;ANALIZZO IL BLOCCO DI CODICE DELL' IF
+            call  pNewLabel             ;Label2 = Label1
+            call  PushString
+            call  wBranchFalse          ;if false, go to Label2
+            call  far ptr pBlock_nx     ;THEN block
             mov   al,Token
-            cmp   al,'l'                ;cerco il token ELSE
+            cmp   al,'l'                ;ELSE?
             jne   pDoIfSkip
             call  pNext
             lea   si,sLabel2
-            call  PopString             ;pop Label2: elimino
-            call  pNewLabel             ;NEW Label2
-            call  wBranch
+            call  PopString             ;drop Label2
+            call  pNewLabel             ;new Label2: the end of the IF
+            call  wBranch               ;THEN block jumps to the end
             lea   si,sLabel1
-            call  PopString             ;pop Label1
-            call  PushString            ;push Label1
+            call  PopString
+            call  PushString
             lea   si,sLabel2
-            call  PushString            ;push Label2
-            call  wPostLabel
-            call  far ptr pBlock_nx     ;ANALIZZO IL BLOCCO DI CODICE DELL'ELSE
+            call  PushString
+            lea   si,sLabel1
+            call  wPostLabel            ;ELSE starts at Label1
+            call  far ptr pBlock_nx     ;ELSE block
 pDoIfSkip:
             lea   si,sLabel2
-            call  PopString             ;pop Label2
-            call  wPostLabel
+            call  PopString
+            call  wPostLabel            ;Label2:
             lea   si,sLabel1
-            call  PopString             ;pop Label1: elimino
-            lea   si,sENDIF             ;CHIUDO L'IF
+            call  PopString
+            lea   si,sENDIF
             call  pMatchString_nx
             ret
 pDoIf       ENDP
 ;
-; rileva e analizza un blocco WHILE ENDWHILE
+; WHILE <bool_expr> <block> ENDWHILE
 ;
 pDoWhile    PROC    FAR
             call  pNext
             lea   si,sLabel2
-            call  pNewLabel             ;genero la prima etichetta
-            call  PushString            ;push Label2
+            call  pNewLabel             ;Label2: after the loop
+            call  PushString
             lea   si,sLabel1
-            call  pNewLabel             ;genero la seconda etichetta
-            call  PushString            ;push Label1
-            call  wPostLabel            ;stampo l'etichetta
+            call  pNewLabel             ;Label1: the test
+            call  PushString
+            call  wPostLabel
             lea   si,sLabel2
-            call  PushString            ;push Label2
-            call  pBoolExpression       ;ANALIZZO L'ESPRESSIONE BOOLEANA DEL WHILE
+            call  PushString
+            call  pBoolExpression       ;the condition
             lea   si,sLabel2
-            call  PopString             ;pop Label2
-            call  wBranchFalse
-            call  far ptr pBlock_nx     ;ANALIZZO IL BLOCCO DI CODICE
-            lea   si,sENDWHILE          ;controllo la chiusura del blocco WHILE
+            call  PopString
+            call  wBranchFalse          ;if false, leave
+            call  far ptr pBlock_nx     ;the body
+            lea   si,sENDWHILE
             call  pMatchString_nx
             lea   si,sLabel1
-            call  PopString             ;pop Label1
-            call  wBranch               ;stampo il ritorno all'inizio del WHILE
+            call  PopString
+            call  wBranch               ;back to the test
             lea   si,sLabel2
-            call  PopString             ;pop Label2
+            call  PopString
             call  wPostLabel
             ret
 pDoWhile    ENDP
 ;
-; rileva e analizza un blocco LOOP ENDLOOP
+; LOOP <count> <block> ENDLOOP: runs the block <count> times with the 8086
+; LOOP instruction (CX), so the block must not change CX
 ;
 pDoLoop     PROC    FAR
             call  pNext
-            call  pBoolExpression       ;ANALIZZO L'ESPRESSIONE BOOLEANA
-            lea   si,sCX                ;salvo in CX
+            call  pBoolExpression       ;the count...
+            lea   si,sCX                ;...into CX
             call  wStore
             lea   si,sLabel1
             call  pNewLabel
-            call  PushString            ;push Label1
+            call  PushString
             call  wPostLabel
-            call  far ptr pBlock_nx     ;ANALIZZO IL BLOCCO DI CODICE
+            call  far ptr pBlock_nx     ;the body
             lea   si,sENDLOOP
             call  pMatchString_nx
             lea   si,sLabel1
-            call  PopString             ;pop Label1
+            call  PopString
             call  wLoop
             ret
 pDoLoop     ENDP
 ;=============================================================================
-; BLOCCHI PER L'INPUT/OUTPUT NATIVO
+; BUILT-IN INPUT/OUTPUT
 ;=============================================================================
 ;
-; Read a Single Variabl
-; Questa procedura scrive il codice necessario alla lettura di una var.
+; Reads a character into a variable or array element
 ;
 pReadVar     PROC    FAR
-           ;CHECKIDENT
            lea  si,Value
            call PushString
            mov  al,Token
@@ -455,15 +470,13 @@ pReadVarSkip1:
            jne  pReadVarSkip2
            call ErrUndefined
 pReadVarSkip2:
-           ;ReadIt
            lea  si,sChar_In
            call output_str
            call pNext
            mov  al,Token
            cmp  al,'['
            jne  pReadVarNoArray
-;array implementation
-           call wPush
+           call wPush           ;array: save the character, compute the index
            call pNext
            call pBoolExpression
            lea  si,sQuadChiusa
@@ -482,10 +495,9 @@ pReadVarEND:
             ret
 pReadVar     ENDP
 ;
-; Read an Integer Variable
+; Reads an integer into a variable or array element
 ;
 pReadIntVar     PROC    FAR
-           ;CHECKIDENT
            lea  si,Value
            call PushString
            mov  al,Token
@@ -500,15 +512,13 @@ pReadIntVarSkip1:
            jne  pReadIntVarSkip2
            call ErrUndefined
 pReadIntVarSkip2:
-           ;ReadIt
            lea  si,sReadInteger
            call output_str
            call pNext
            mov  al,Token
            cmp  al,'['
            jne  pReadIntVarNoArray
-;array implementation
-           call wPush
+           call wPush           ;array: save the number, compute the index
            call pNext
            call pBoolExpression
            lea  si,sQuadChiusa
@@ -518,7 +528,7 @@ pReadIntVarSkip2:
            call PopString
            mov  bx,0
            call wStoreArray
-           jmp  pReadVarEND
+           jmp  pReadIntVarEND
 pReadIntVarNoArray:
            lea  si,TmpValue
            call PopString
@@ -527,7 +537,7 @@ pReadIntVarEND:
             ret
 pReadIntVar     ENDP
 ;
-; rileva e analizza l'istruzione READ(char)
+; READ(v1, v2, ...): reads characters
 ;
 pDoRead     PROC    FAR
             call  pNext
@@ -546,7 +556,7 @@ pDoReadFinish:
             ret
 pDoRead     ENDP
 ;
-; rileva e analizza l'istruzione WRITE(char)
+; WRITE(e1, e2, ...): writes characters
 ;
 pDoWrite     PROC    FAR
             call  pNext
@@ -567,7 +577,7 @@ pDoWriteFinish:
             ret
 pDoWrite     ENDP
 ;
-; rileva e analizza l'istruzione READINT(int)
+; READINT(v1, v2, ...): reads integers
 ;
 pDoReadInt     PROC    FAR
             call  pNext
@@ -586,7 +596,7 @@ pDoReadIntFinish:
             ret
 pDoReadInt     ENDP
 ;
-; rileva e analizza l'istruzione WRITEINT(int)
+; WRITEINT(e1, e2, ...): writes integers
 ;
 pDoWriteInt     PROC    FAR
             call  pNext
@@ -607,7 +617,7 @@ pDoWriteIntFinish:
             ret
 pDoWriteInt     ENDP
 ;
-; rileva e analizza l'istruzione WRITESTR($string)
+; WRITESTR($s1, $s2, ...): writes string constants
 ;
 pDoWriteString     PROC    FAR
             call  pNext
@@ -621,19 +631,21 @@ pDoWriteStrWhile:
             call  ErrExpected
 pDoWriteStrSkip:
             call  wWriteString
+            call  pNext
             mov   al,Token
             cmp   al,','
             jne   pDoWriteStrFinish
                 call pNext
             jmp   pDoWriteStrWhile
 pDoWriteStrFinish:
-            call  pNext
             lea   si,sParentChiusa
             call  pMatchString_nx
             ret
 pDoWriteString     ENDP
 ;
-; rileva e analizza un blocco MASM ENDMASM
+; MASM ... ENDMASM: copies the lines in between to the output as they are.
+; The first word of each line comes through the scanner, so it is in upper
+; case, and lines that start with a comment are dropped.
 ;
 pDoMasm     PROC    FAR
             lea si,sMASMcomment1
@@ -642,22 +654,34 @@ pDoMasmWhile1:
             call  pNext
             call  pScan
             mov al,Token
-            cmp   al,'M'
+            cmp   al,'M'                ;ENDMASM
             je    pDoMasmFinish
+            cmp   al,EOFCHR
+            jne   pDoMasmLine
+            lea   si,sENDMASM
+            call  ErrExpected
+pDoMasmLine:
             lea   si,Value
             call  output_str
             mov   al,' '
             call  output_char
-        pDoMasmWhile2:
+        pDoMasmWhile2:                  ;the rest of the line
                 mov   al,Look
                 cmp   al,CR
                 je    pDoMasmSkipWhile2
+                cmp   al,EOFCHR
+                je    pDoMasmSkipWhile2
                 call  pGetChar
+                cmp   al,CR
+                je    pDoMasmSkipWhile2
+                cmp   al,LF
+                je    pDoMasmWhile2
+                cmp   al,EOFCHR
+                je    pDoMasmSkipWhile2
                 call  output_char
                 jmp   pDoMasmWhile2
 pDoMasmSkipWhile2:
-            mov   al,LF
-            call  output_char
+            call  wNewLine
             jmp   pDoMasmWhile1
 pDoMasmFinish:
             lea si,sMASMcomment2
@@ -666,7 +690,7 @@ pDoMasmFinish:
             ret
 pDoMasm     ENDP
 ;
-; rileva la procedura NEWLINE
+; NEWLINE
 ;
 pDoNewLine     PROC    FAR
             lea   si,sNewLine
@@ -675,10 +699,10 @@ pDoNewLine     PROC    FAR
             ret
 pDoNewLine     ENDP
 ;=============================================================================
-; GESTIONE DELLE ASSEGNAZIONI
+; ASSIGNMENT
 ;=============================================================================
 ;
-; Parse and Translate an Assignment Statement
+; <variable> ['[' <bool_expr> ']'] '=' <bool_expr>
 ;
 pAssignment     PROC    FAR
             lea  di,Value
@@ -688,27 +712,26 @@ pAssignment     PROC    FAR
             call ErrUndefined
 pAssignmentSkip1:
             lea  si,Value
-            call PushString             ;push Operand Value
+            call PushString             ;keep the name
             call pNext
             mov  al,Token
             mov  bx,0
-            cmp  al,'['                 ;controlla se è un array
+            cmp  al,'['                 ;array element?
             jne  pAssignmentSkipArray
-;array implementation
             call pNext
-            call pBoolExpression        ;calcola l'indice dell'array
+            call pBoolExpression        ;the index
             lea  si,sQuadChiusa
             call pMatchString_nx
             call wPush
             mov  bx,1
 pAssignmentSkipArray:
             push bx
-            lea  si,sUguale             ;trova il simbolo =
+            lea  si,sUguale
             call pMatchString_nx
-            call pBoolExpression
+            call pBoolExpression        ;the value
             pop  bx
             lea  si,TmpValue
-            call PopString              ;pop Operand
+            call PopString
             cmp  bx,1
             jne  pAssignmentSkipStoreArray
             call wStoreArray
@@ -719,10 +742,9 @@ pAssignmentEND:
             ret
 pAssignment     ENDP
 ;=============================================================================
-; BLOCCO PRINCIPALE, SMISTA IL LAVORO ALLE VARIE PROCEDURE A SECONDA DEL TOKEN
+; BLOCK: statements up to ENDxxx, ELSE or END, each one handed to its
+; procedure by its token
 ;=============================================================================
-;
-; rileva e analizza il blocco di istruzioni successivo 
 ;
 pBlock_nx   PROC    FAR
 pBlockWhile:
@@ -730,9 +752,13 @@ pBlockWhile:
            call pScan
            mov  al,Token
            call isEndBlock
-           jnz   pBlockSkipGOTOend      ;devo fare il salto
-           jmp pBlockEND                ;di più di 128 byte
-pBlockSkipGOTOend:                      ;CASE OF:
+           jnz   pBlockSkipGOTOend      ;(a conditional jump can't reach
+           jmp pBlockEND                ; that far)
+pBlockSkipGOTOend:
+           cmp  al,EOFCHR
+               jne  pBLockSkip0
+               call ErrEOF
+pBLockSkip0:
            cmp  al,'i'
                jne  pBLockSkip1
                call pDoIf
@@ -768,7 +794,7 @@ pBLockSkip6:
                call pDoReadInt
                jmp  pBlockFINISH
 pBLockSkip7:
-           cmp  al,'§'
+           cmp  al,'S'
                jne  pBLockSkip8
                call pDoWriteString
                jmp  pBlockFINISH
@@ -783,12 +809,11 @@ pBLockSkip9:
                call pDoNewLine
                jmp  pBlockFINISH
 pBLockSkip10:
-               ;else
-               call pAssignment
+               call pAssignment         ;anything else is an assignment
 pBlockFINISH:
            jmp  pBlockWhile
 pBlockEND:
            ret
 pBlock_nx   ENDP
 ;
-pBlocksS  ENDS 
+pBlocksS  ENDS

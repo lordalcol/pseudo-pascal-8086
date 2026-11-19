@@ -1,13 +1,11 @@
 ;=============================================================================
-; PROCEDURE CHE SCRIVONO IN MODO DINAMICO I "PEZZI" DI ASSEMBLY COMPILATO
-; IL CODICE EMESSO E' UN MIX TRA STRINGHE COSTANTI PRESE DAL SEGMENTO DEI
-; DATI E STRINGHE DINAMICHE GENERATE AL VOLO DAL COMPILATORE E PASSATE
-; ATTRAVERSO SI
-;=============================================================================
+; CODE GENERATOR: writes the pieces of the output assembly. Each procedure
+; combines constant strings from the data segment with names that come
+; from the source (in SI or Value).
 ;
-; Le seguenti istruzioni non sono commentate, poichè non sono interessanti
-; dal punto di vista logico. E' sufficiente leggere le stringhe costanti
-; caricate dal segmento DATI per intuire il funzionamento di ciascuna.
+; The generated code is a simple stack machine: AX holds the value being
+; computed, PUSH AX saves the left operand, POP BX takes it back.
+;=============================================================================
 ;
 wINSTRS      SEGMENT PARA PUBLIC 'CODE'
              ASSUME  CS:wINSTRS
@@ -19,8 +17,7 @@ wNewLine  PROC    FAR
            ret
 wNewLine  ENDP
 ;
-; write header of masm file
-;
+; Start of the file: runtime include, stack, start of the data segment
 wHeader    PROC    FAR
            push si
            lea si,sHeader
@@ -29,8 +26,7 @@ wHeader    PROC    FAR
            ret
 wHeader    ENDP
 ;
-; write prolog of masm file
-;
+; End of the data segment, start of the code segment
 wProlog    PROC    FAR
            push si
            lea si,sProlog
@@ -39,8 +35,7 @@ wProlog    PROC    FAR
            ret
 wProlog    ENDP
 ;
-; write header of masm file
-;
+; End of the program
 wEpilog    PROC    FAR
            push si
            lea si,sEpilog
@@ -49,8 +44,7 @@ wEpilog    PROC    FAR
            ret
 wEpilog    ENDP
 ;
-; write allocation code
-;
+; Data: "NAME dw 0"
 wAllocate  PROC    FAR
            push si
            lea si,Value
@@ -60,7 +54,7 @@ wAllocate  PROC    FAR
            pop si
            ret
 wAllocate  ENDP
-
+; Data: "$NAME db " (the text follows)
 wAllocateString  PROC    FAR
            push si
            lea si,Value
@@ -77,7 +71,7 @@ wAllocateString2  PROC    FAR
            pop si
            ret
 wAllocateString2  ENDP
-
+; Data: "NAME dw " (the size follows)
 wAllocateArray  PROC    FAR
            push si
            lea si,Value
@@ -92,7 +86,7 @@ wAllocateArray2  PROC    FAR
            call output_str
            ret
 wAllocateArray2  ENDP
-
+; "LOOP <label SI>"
 wLoop   PROC   FAR
             push  si
             lea   si,sLoop
@@ -102,7 +96,8 @@ wLoop   PROC   FAR
             call  wNewLine
             ret
 wLoop   ENDP
-
+; Jump to <label SI> if AX is false. Conditional jumps on the 8086 reach
+; only 128 bytes, so: JNE skipLn / JMP Ln / skipLn:
 wBranchFalse  PROC    FAR
            push si
            lea  si,sBranchFalse1
@@ -131,7 +126,7 @@ wBranchFalse  PROC    FAR
            call wNewLine
            ret
 wBranchFalse  ENDP
-
+; "JMP <label SI>"
 wBranch  PROC    FAR
            push si
            lea  si,sBranch
@@ -143,7 +138,7 @@ wBranch  PROC    FAR
            pop  si
            ret
 wBranch  ENDP
-
+; "<label SI>:"
 wPostLabel  PROC    FAR
            call output_str
            push ax
@@ -153,7 +148,6 @@ wPostLabel  PROC    FAR
            pop  ax
            ret
 wPostLabel  ENDP
-
 wPush   PROC    FAR
             push  ax
             lea si,sPush
@@ -161,7 +155,7 @@ wPush   PROC    FAR
             pop   ax
             ret
 wPush   ENDP
-
+; Binary operators: left operand on the stack, right operand in AX
 wPopAdd   PROC    FAR
             lea si,sPopBX
             call output_str
@@ -169,7 +163,6 @@ wPopAdd   PROC    FAR
             call output_str
             ret
 wPopAdd   ENDP
-
 wPopSub   PROC    FAR
             lea si,sPopBX
             call output_str
@@ -177,7 +170,6 @@ wPopSub   PROC    FAR
             call output_str
             ret
 wPopSub   ENDP
-
 wPopMul   PROC    FAR
             lea si,sPopBX
             call output_str
@@ -185,13 +177,11 @@ wPopMul   PROC    FAR
             call output_str
             ret
 wPopMul   ENDP
-
 wPopDiv   PROC    FAR
             lea si,sPopDiv
             call output_str
             ret
 wPopDiv   ENDP
-
 wPopAnd   PROC    FAR
             lea si,sPopBX
             call output_str
@@ -199,7 +189,6 @@ wPopAnd   PROC    FAR
             call output_str
             ret
 wPopAnd   ENDP
-
 wPopOr   PROC    FAR
             lea si,sPopBX
             call output_str
@@ -207,7 +196,6 @@ wPopOr   PROC    FAR
             call output_str
             ret
 wPopOr   ENDP
-
 wPopXOr   PROC    FAR
             lea si,sPopBX
             call output_str
@@ -215,7 +203,6 @@ wPopXOr   PROC    FAR
             call output_str
             ret
 wPopXOr   ENDP
-
 wPopCompare   PROC    FAR
             lea si,sPopBX
             call output_str
@@ -223,57 +210,48 @@ wPopCompare   PROC    FAR
             call output_str
             ret
 wPopCompare   ENDP
-
+; After the compare: AX = 1 if the relation holds, else 0
 wSetEqual   PROC    FAR
             lea si,sSetEqual
             call output_str
             ret
 wSetEqual   ENDP
-
 wSetNEqual   PROC    FAR
             lea si,sSetNEqual
             call output_str
             ret
 wSetNEqual   ENDP
-
 wSetGreater   PROC    FAR
             lea si,sSetGreater
             call output_str
             ret
 wSetGreater   ENDP
-
 wSetLess   PROC    FAR
             lea si,sSetLess
             call output_str
             ret
 wSetLess   ENDP
-
 wSetLessOrEqual   PROC    FAR
             lea si,sSetLessOrEqual
             call output_str
             ret
 wSetLessOrEqual   ENDP
-
 wSetGreaterOrEqual   PROC    FAR
             lea si,sSetGreaterOrEqual
             call output_str
             ret
 wSetGreaterOrEqual   ENDP
-
-
-
-
 wClear   PROC    FAR
             lea si,sClear
             call output_str
             ret
 wClear   ENDP
-
 wNotIt   PROC    FAR
             lea si,sNotIt
+            call output_str
             ret
 wNotIt   ENDP
-
+; "MOV <SI>, AX"
 wStore    PROC    FAR
             push si
             lea si,sMOV
@@ -285,7 +263,8 @@ wStore    PROC    FAR
             call wNewLine
             ret
 wStore    ENDP
-
+; "MOV <SI>[BX], AX" with the index on the stack. BX = 0: the value is on
+; the stack too, under the index
 wStoreArray    PROC    FAR
             push si
             lea si,sStoreArray1
@@ -293,7 +272,7 @@ wStoreArray    PROC    FAR
             cmp bx,0
             jne wStoreArraySkip
             lea si,sStoreArray1BIS
-            call output_str            
+            call output_str
 wStoreArraySkip:
             lea si,sMOV
             call output_str
@@ -303,7 +282,7 @@ wStoreArraySkip:
             call output_str
             ret
 wStoreArray    ENDP
-
+; "MOV AX, <SI>", after checking that the variable exists
 wLoadVar        PROC    FAR
            call far ptr pInTable
            cmp  cx,0
@@ -318,7 +297,7 @@ wLoadVarSkip:
             call wNewLine
             ret
 wLoadVar        ENDP
-
+; "MOV AX, <SI>[BX]" with the index in AX
 wLoadArray        PROC    FAR
            call far ptr pInTable
            cmp  cx,0
@@ -334,7 +313,7 @@ wLoadArraySkip:
             call output_str
             ret
 wLoadArray        ENDP
-
+; "MOV AX, <constant SI>"
 wLoadConst        PROC    FAR
             push si
             lea si,sLoadVar
@@ -344,7 +323,7 @@ wLoadConst        PROC    FAR
             call wNewLine
             ret
 wLoadConst        ENDP
-
+; "LEA SI, <string Value>" + "CALL DSP_STR"
 wWriteString    PROC    FAR
             lea di,Value
             lea si,sWriteString1
@@ -356,5 +335,4 @@ wWriteString    PROC    FAR
             call output_str
             ret
 wWriteString    ENDP
-
 wINSTRS      ENDS

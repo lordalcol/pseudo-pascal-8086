@@ -1,6 +1,9 @@
 program
     var k,cESC
+    $title = "Type some text: each letter shifts by one. Esc quits."
 begin
+    writeStr($title)
+    newline
     cESC=27
     read(k)
     while(k<>cESC)

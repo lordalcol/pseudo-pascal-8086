@@ -1,0 +1,5 @@
+Pseudo-Pascal to 8086 assembly compiler - Lorenzo Dal Col, 2006
+1: program
+2:     var a, b
+3:     array a[
+[LINE: 3] Error: A Duplicated symbol declaration

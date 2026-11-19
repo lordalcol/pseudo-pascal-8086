@@ -1,12 +1,12 @@
 program
     var x,y,op,kESC
-    $titolo = "CALCOLATRICE SEQUENZIALE (Operatori: + - * / INVIO )"
+    $title = "RUNNING CALCULATOR (operators: + - * / then a number and Enter, Esc quits)"
 begin
-    writeStr($titolo)
+    writeStr($title)
     newline
     newline
     kESC=27
-    
+
     x=0
     writeInt(x)
     read(op)
@@ -31,5 +31,5 @@ begin
         read(op)
         write(op)
     endwhile
-    
+
 end.

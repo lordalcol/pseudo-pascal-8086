@@ -1,0 +1,25 @@
+14:         int 1Ah
+15:         and dx,7FFFh
+16:         mov secret,dx
+17:     endmasm
+18:     secret = secret - (secret / 100) * 100 + 1
+19:     tries = 0
+20:     guess = 0
+21:     while guess <> secret
+22:         writeStr($ask)
+23:         readInt(guess)
+24:         newline
+25:         tries = tries + 1
+26:         if guess < secret
+27:             writeStr($low)
+28:             newline
+29:         endif
+30:         if guess > secret
+31:             writeStr($high)
+32:             newline
+33:         endif
+34:     endwhile
+35:     writeStr($win)
+36:     writeInt(tries)
+37: end.
+38:

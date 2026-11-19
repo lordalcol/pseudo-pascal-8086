@@ -1,162 +1,176 @@
 ;=============================================================================
-; PROCEDURE DI USO GENERALE:
-; SCANNER, PARSER, gestione della TABELLA DEI SIMBOLI, proc di allocazione e
-; di riconoscimento dei TOKEN (parole chiave)
+; GENERAL PROCEDURES: the scanner, the symbol table, the declarations,
+; keyword lookup, file names and start-up.
+;
+; The scanner leaves the text of each token in Value and a one-letter code
+; in Token: 'x' identifier, '#' number or character constant, '$' string
+; constant, a keyword letter from KWcode (after pScan), or the operator
+; character itself.
 ;=============================================================================
 pGENERALS    SEGMENT PARA PUBLIC 'CODE'
              ASSUME  CS:pGENERALS
 ;
-; controlla se il carattere corrente è "BIANCO" cioè spazio, tab, invio, ecc.
-; in questo caso lo salta
+; Skips a comment: everything up to the end of the line
 ;
 pSkipComment   PROC    FAR
 pSkCommWhile:
-           cmp al,CR            ;inizio while
+           cmp al,CR
            je   pSkCommEND
+           cmp al,EOFCHR
+           je   pSkCommEOF
            call pGetChar
-           jmp pSkCommWhile     ;fine while
+           jmp pSkCommWhile
 pSkCommEND:
            call pGetChar
+pSkCommEOF:
            ret
 pSkipComment   ENDP
 ;
-; controlla se il carattere corrente è "BIANCO" cioè spazio, tab, invio, ecc.
-; in questo caso lo salta
+; Skips white space (spaces, tabs, new lines) and comments
 ;
 pSkipWhite_nx   PROC    FAR
 pWhiteWhile:
         mov  al,Look
-	CALL isWhite            ;inizio il ciclo "while"
+	CALL isWhite
 	JNZ pSkipWhiteEND
-	CMP al,chrCOMMENT       ;se il carattere è l'inizio di un commento
+	CMP al,chrCOMMENT       ;a comment starts with ;
         JNE pSkipNoComment
-            call pSkipComment       ;salto l'intero commento
-            JMP pWhiteWhile         ;fine ciclo (1)
+            call pSkipComment
+            JMP pWhiteWhile
 pSkipNoComment:
-            CALL pGetChar            ;altrimenti procedo a eliminare il bianco
-            JMP pWhiteWhile         ;fine ciclo (2)
+            CALL pGetChar
+            JMP pWhiteWhile
 pSkipWhiteEND:
            ret
 pSkipWhite_nx   ENDP
 ;
-; rileva la prossima parola "IDENTIFICATORE"
+; Scans an identifier into Value, in upper case
 ;
 pGetName   PROC    FAR
            push si
            push bx
            lea bx,Value
            call pSkipWhite_nx
-           call isAlpha                 ;controllo se il carattere è alfa
-           jz   pGetNskipError          ;se è alpha procedi...
+           call isAlpha
+           jz   pGetNskipError
            lea  si,sErrIdentifier
-           call ErrExpected             ;altrimenti ERRORE
+           call ErrExpected
 pGetNskipError:
            mov Token,'x'
            mov si,0
 pGetNrepeat:
            call ToUpper
-           mov [bx][si],al             ;value=value+AL
+           cmp si,MaxName       ;keep the first MaxName characters
+           jae pGetNskip
+           mov [bx][si],al
            inc si
+pGetNskip:
            call pGetChar
-           call isAlNum                 ;finchè il char è Alfanumerico continuo il ciclo
+           call isAlNum         ;go on while alphanumeric
            jz   pGetNrepeat
-           mov byte ptr [bx][si],0      ;alla fine del ciclo chiudo la stringa con 0
+           mov byte ptr [bx][si],0
            pop bx
            pop si
            ret
 pGetName   ENDP
 ;
-; rileva il prossimo numero intero
+; Scans an unsigned integer into Value
 ;
 pGetNum   PROC    FAR
            push si
            push bx
            lea bx,Value
            call pSkipWhite_nx
-           call isDigit                 ;controllo se il carattere è numerico
-           jz   pGetNumskipError        ;se è digit procedi...
+           call isDigit
+           jz   pGetNumskipError
            lea  si,sErrNumber
-           call ErrExpected             ;altrimenti ERRORE
+           call ErrExpected
 pGetNumskipError:
            mov Token,'#'
            mov si,0
 pGetNumrepeat:
-           mov [bx][si],al             ;value=value+AL
+           cmp si,MaxName
+           jae pGetNumskip
+           mov [bx][si],al
            inc si
+pGetNumskip:
            call pGetChar
-           call isDigit                 ;finchè il char è numerico continuo il ciclo
+           call isDigit
            jz pGetNumrepeat
-           mov byte ptr [bx][si],0      ;alla fine del ciclo chiudo la stringa con 0
+           mov byte ptr [bx][si],0
            pop bx
            pop si
            ret
 pGetNum    ENDP
 ;
-; rileva il prossimo identificatore 'x', cioè un char
+; Scans a character constant 'c' into Value, quotes included: MASM takes it
+; as is
 ;
 pGetIntChar   PROC    FAR
            push si
            push bx
            lea bx,Value
            call pSkipWhite_nx
-           cmp al,"'"                   ;controllo se il carattere è '
-           jz   pGetICskipError          ;se sì procedi...
+           cmp al,"'"
+           jz   pGetICskipError
            lea  si,sErrCharIdent
-           call ErrExpected             ;altrimenti ERRORE
+           call ErrExpected
 pGetICskipError:
            mov Token,'#'
            mov si,0
-           mov [bx][si],al             ;SCRIVO IL PRIMO '
+           mov [bx][si],al      ;opening '
            inc si
-           call pGetChar                ;prendo un altro carattere dopo '
-           mov [bx][si],al             ;SCRIVO IL CHAR
+           call pGetChar
+           mov [bx][si],al      ;the character
            inc si
-           call pGetChar                ;prendo un altro carattere il CHAR
-           cmp al,"'"                   ;controllo se il carattere è '
-           je   pGetICskipError2          ;se sì procedi...
+           call pGetChar
+           cmp al,"'"
+           je   pGetICskipError2
            lea  si,sErrCharIdent2
-           call ErrExpected             ;altrimenti ERRORE
+           call ErrExpected
 pGetICskipError2:
-           mov [bx][si],al             ;SCRIVO IL SECONDO '
+           mov [bx][si],al      ;closing '
            inc si
-           mov byte ptr [bx][si],0     ;alla fine del ciclo chiudo la stringa con 0
+           mov byte ptr [bx][si],0
            call pGetChar
            pop bx
            pop si
            ret
 pGetIntChar    ENDP
 ;
-; rileva il prossimo identificatore di costante stringa: $stringa
+; Scans the name of a string constant: $name
 ;
 pGetStringName   PROC    FAR
            push si
            push bx
            lea bx,Value
-           ;call pSkipWhite_nx
-           cmp  al,'$'                 ;controllo se il carattere è inizio stringa $
-           jz   pGetSskipError          ;se sì procedi...
+           cmp  al,'$'
+           jz   pGetSskipError
            lea  si,sErrStringIdent
-           call ErrExpected             ;altrimenti ERRORE
+           call ErrExpected
 pGetSskipError:
            mov Token,'$'
            mov si,0
 pGetSrepeat:
-           mov [bx][si],al              ;value=value+AL
+           cmp si,MaxName
+           jae pGetSskip
+           mov [bx][si],al
            inc si
+pGetSskip:
            call pGetChar
-           call isAlNum                 ;finchè il char è Alfanumerico continuo il ciclo
+           call isAlNum
            jz pGetSrepeat
-           mov byte ptr [bx][si],0      ;alla fine del ciclo chiudo la stringa con 0
+           mov byte ptr [bx][si],0
            pop bx
            pop si
            ret
 pGetStringName    ENDP
 ;
-; rileva l'operatore
+; Scans an operator: one character, which is also the token
 ;
 pGetOp   PROC    FAR
            call pSkipWhite_nx
-           mov Token,al         ;tokenizzo il carattere (operatore) così com'è
+           mov Token,al
            lea si,Value
            mov [si],al
            inc si
@@ -165,79 +179,79 @@ pGetOp   PROC    FAR
            ret
 pGetOp   ENDP
 ;
-; rileva il gruppo di caratteri successivi
-; se il carattere successivo è alfanumerico cattura la prossima parola
-; altrimenti cattura solamente il carattere (un operatore)
+; Scans the next token, choosing by its first character
 ;
 pNext   PROC    FAR
            mov al,Look
            call pSkipWhite_nx
-                                ;FACCIO I VARI CONTROLLI SUL CARATTERE IMMESSO
            mov  al,Look
            call IsAlpha
            jnz   pNextSkip1
-           call pGetName        ;se è una lettera catturo un Identifier
+           call pGetName        ;letter: identifier or keyword
            ret
 pNextSkip1:
            call IsDigit
            jnz   pNextSkip2
-           call pGetNum         ;se è una cifra catturo un numero
+           call pGetNum         ;digit: number
            ret
 pNextSkip2:
            cmp al,"'"
            jnz   pNextSkip3
-           call pGetIntChar     ;se è un apice ' catturo un char 'c'
+           call pGetIntChar     ;quote: character constant 'c'
            ret
 pNextSkip3:
            cmp al,"$"
            jnz   pNextSkip4
-           call pGetStringName  ;se è $ catturo l'identificatore di una cost. stringa
+           call pGetStringName  ;$: string constant name
            ret
 pNextSkip4:
-           call pGetOp
+           cmp al,EOFCHR
+           jne   pNextSkip5
+           mov Token,al         ;end of file: Token = EOFCHR, Value = ""
+           mov Value,0
+           ret
+pNextSkip5:
+           call pGetOp          ;anything else: operator
            ret
 pNext   ENDP
 ;
-; Table Lookup: trova la posizione della parola tra le chiavi del linguaggio
-;       ingresso: SI punta alla lista di stringhe in cui si vuole cercare
-;                 DI punta alla stringa che si deve cercare
-;                 AX è il massimo numero di stringhe visitabili nella lista
-;       restituisce in CX la posizione
+; Table lookup: finds a string in a list of zero-terminated strings
+;       input:  SI -> the list
+;               DI -> the string to look for
+;               AX = number of strings in the list + 1
+;       output: CX = position, 1-based, or 0 if not found
 ;
 pLookup    PROC    FAR
            push bx
            mov  bx,1
 pLookupWhile:
            call strcmp
-           jz  pLookupEND      ;se le stringhe sono uguali esci
-           inc  bx              ; ho fatto un'altra stringa: incremento
-           ;controllo se ho raggiunto il numero massimo di stringhe nella lista
-           cmp  bx,ax
+           jz  pLookupEND       ;found
+           inc  bx
+           cmp  bx,ax           ;end of the list?
            jne  pLookupAvanza
-           mov  cx,0    ;se ho raggiunto il massimo significa che non ho trovato nulla
+           mov  cx,0            ;not found
            pop  bx
            ret
-        pLookupAvanza:
-                   inc  si      ;altrimenti vai in cerca della fine della stringa
-                   cmp  byte ptr [si],0  ;in KWlist
-                   jne  pLookupAvanza           ;se non è 0 avanzo con i caratteri
-                   inc  si
-                   jmp   pLookupWhile    ;se trova la fine della stringa riparte
-                   
-pLookupEND:                     ;fine: ho trovato e tokenizzato oppure
-                                ;esco per forza con cx a zero
+pLookupAvanza:
+           inc  si              ;skip to the next string
+           cmp  byte ptr [si],0
+           jne  pLookupAvanza
+           inc  si
+           jmp   pLookupWhile
+pLookupEND:
            mov  cx,bx
            pop  bx
            ret
 pLookup    ENDP
 ;
-; Look for Symbol in Table
+; Looks for the string at DI in the symbol table: CX = 1 if found, else 0
 ;
 pInTable   PROC    FAR
            push ax
-           lea  si,SymbTable     ;puntatore alla lista di stringhe
-           ;lea  di,Value         ;puntatore alla stringa da cercare
-           mov  ax,MaxEntry      ;massimo numero di simboli possibili
+           push si
+           lea  si,SymbTable+16  ;entry 1
+           mov  ax,MaxEntry
 pInTableWhile:
            call strcmp
            jz pInTableEqual
@@ -246,15 +260,17 @@ pInTableWhile:
            cmp ax,0
            jne pInTableWhile
            mov cx,0
+           pop si
            pop ax
            ret
 pInTableEqual:
            mov  cx,1
+           pop  si
            pop  ax
            ret
 pInTable   ENDP
 ;
-; Add a New Entry to Symbol Table
+; Adds Value to the symbol table, with type Token
 ;
 pAddEntry   PROC    FAR
            push  bx
@@ -274,13 +290,12 @@ pAddEntrySkipError2:
            mov  bl,Token
            mov  si,cx
            lea  si,SType[si]
-           mov  [si],bl
+           mov  [si],bl         ;SType[NEntry] = Token
            xchg  ax,cx
            mov  bl,16
-           mul  bl       ;ax := al * 8
+           mul  bl              ;AX = NEntry * 16
            xchg  ax,cx
-           ;copio dentro SymbTable[cx] la stringa Value
-           mov  si,cx
+           mov  si,cx           ;SymbTable[NEntry] = Value
            lea  si,SymbTable[si]
            lea  di,Value
            call StrCpy
@@ -288,25 +303,25 @@ pAddEntrySkipError2:
            ret
 pAddEntry   ENDP
 ;
-; Scan the Current Identifier for Keywords
+; Turns an identifier into a keyword token, if it is one
 ;
 pScan      PROC    FAR
            mov al,Token
-           cmp al,'x'           ;IF Token = 'x'
+           cmp al,'x'
            jne pScanEND
-           lea si,KWlist        ;puntatore alla lista di stringhe
-           lea di,Value         ;puntatore alla stringa da cercare
-           mov ax,NKW           ;numero di stringhe presenti nella lista
-           call pLookup         ;table lookup returns into CX
+           lea si,KWlist
+           lea di,Value
+           mov ax,NKW
+           call pLookup         ;CX = keyword number, 0 if none
            lea  si,KWcode
            add  si,cx
-           mov al,[si]    ;prendo il token: il carattere alla posizione CX
+           mov al,[si]          ;Token = KWcode[CX]
            mov Token,al
 pScanEND:
            ret
 pScan      ENDP
 ;
-;   Allocate Storage for a Variable  
+;   Declares a variable: name dw 0
 ;
 pAlloc_nx  PROC    FAR
            call pNext
@@ -323,7 +338,7 @@ pAlloc_START:
            ret
 pAlloc_nx  ENDP
 ;
-;   Allocate Storage for a string
+;   Declares a string constant: $name = "text"  ->  $name db "text",0
 ;
 pAllocString_nx  PROC    FAR
            push bx
@@ -336,7 +351,6 @@ pAllocStrSkip1:
            mov  bx,'$'
            call pAddEntry
            call wAllocateString
-           ;call pGetChar
            call pSkipWhite_nx
            mov  al,look
            cmp  al,'='
@@ -352,14 +366,20 @@ pAllocStrSkip2:
            lea  si,sErrString2
            call ErrExpected
 pAllocStrSkip3:
-           call output_char
+           call output_char     ;copy the text, quotes included
 pAllocStrContinue:
            call pGetChar
+           cmp  al,CR           ;the text must end on the same line
+           je   pAllocStrUnclosed
+           cmp  al,EOFCHR
+           je   pAllocStrUnclosed
            call output_char
-           mov  al,look
            cmp  al,'"'
            je   pAllocStrEND
            jmp  pAllocStrContinue
+pAllocStrUnclosed:
+           lea  si,sErrString2
+           call ErrExpected
 pAllocStrEND:
            call wAllocateString2
            call pGetChar
@@ -368,7 +388,7 @@ pAllocStrEND:
            ret
 pAllocString_nx  ENDP
 ;
-;   Allocate Storage for an array
+;   Declares an array: name[size]  ->  name dw size dup(0)
 ;
 pAllocArray_nx  PROC    FAR
            call pNext
@@ -381,7 +401,6 @@ pAllocArrSkip1:
            mov  bx,'v'
            call pAddEntry
            call wAllocateArray
-           ;call pSkipWhite_nx
            mov  al,look
            cmp  al,'['
            je   pAllocArrSkip2
@@ -410,79 +429,68 @@ pAllocArrSkip4:
            ret
 pAllocArray_nx  ENDP
 ;
-; rileva e inizializza le dichiarazioni delle variabili
+; Declarations: any number of  var a,b,c  /  array a[n],b[m]  /  $s = "text"
 ;
 pTopDecls_nx   PROC    FAR
 ptdINIZIO:
-           call pScan           ;creo il TOKEN  
-           ;controllo se AL è v,$,A
-           mov al,Token         ;uso AL al posto della var. Token
+           call pScan
+           mov al,Token
            cmp  al,'v'
-           je   ptdWhile        ;inizio il ciclo
+           je   ptdWhile
            cmp  al,'$'
-           je   ptdWhile        ;inizio il ciclo
+           je   ptdWhile
            cmp  al,'A'
-           je   ptdWhile        ;inizio il ciclo
-           jmp  ptdEND          ;se arrivo qui esco dal while
-ptdWhile:                       ;ciclo while grande
+           je   ptdWhile
+           jmp  ptdEND          ;not a declaration: done
+ptdWhile:
 ptdVar:    cmp  al,'v'
-           jne  ptdString       ;se AL non è 'v' provo con le stringhe
-           call pAlloc_nx       ;SE è 'v' alloco la variabile
+           jne  ptdString
+           call pAlloc_nx       ;var: one variable...
            mov  al,Token
-ptdVarWh:             cmp  al,','       ;finchè trovo ',' alloco
-                      je  ptdSkip       ;se trovo ',' alloco
-                      ;call pNext
-                      jmp  ptdINIZIO       ;riparto col ciclo grande
+ptdVarWh:             cmp  al,','       ;...and one more after each comma
+                      je  ptdSkip
+                      jmp  ptdINIZIO
             ptdSkip:  call pAlloc_nx
                       mov  al,token
                       jmp  ptdVarWh
-ptdString: cmp  al,'$'          ;se è una stringa alloco
-           jne  ptdArray        ;se non è una stringa provo con l'array
-           call pAllocString_nx ;alloco
+ptdString: cmp  al,'$'
+           jne  ptdArray
+           call pAllocString_nx ;string constant
            jmp  ptdInizio
-ptdArray:  cmp  al,'A'          
-           jne  ptdINIZIO       ;se non è un array riparto con il ciclo grande
-           call pAllocArray_nx  ;se è un array alloco
+ptdArray:  cmp  al,'A'
+           jne  ptdINIZIO
+           call pAllocArray_nx  ;array: one array...
            mov  al,Token
-ptdArrWh:             cmp  al,','       ;finchè trovo ',' alloco
-                      je  ptdArrSkip       ;se trovo ',' alloco
-                      ;call pNext
-                      jmp  ptdINIZIO       ;riparto col ciclo grande
+ptdArrWh:             cmp  al,','       ;...and one more after each comma
+                      je  ptdArrSkip
+                      jmp  ptdINIZIO
             ptdArrSkip:  call pAllocArray_nx
                       mov  al,token
                       jmp  ptdArrWh
-                      
-           call pScan           ;creo il Token
-           jmp ptdINIZIO            ;riparto con il ciclo
 ptdEND:
            ret
 pTopDecls_nx   ENDP
 ;
-; controlla se l'ultima stringa rilevata corrisponde con la richiesta
+; Checks that the current token is the string at SI, then scans the next one
 ;
 pMatchString_nx   PROC    FAR
-           ;controlla se le due stringhe di lunghezza diversa sono uguali
-           ; stringa1: Value
-           ; stringa2: ds:si
            push di
-           lea di,Value         ;carico la prima stinga
+           lea di,Value
            push ax
            mov ax,ds
-           mov es,ax            ;es e ds puntano allo stesso segmento
+           mov es,ax
            pop ax
-           call strcmp          ;faccio il confronto, se ricevo ZERO sono diverse
+           call strcmp
            jz pMatchEqual
-           call ErrExpected     ;esco con l'errore, mi aspettavo la stringa
-                                ;puntata da ds:si
+           call ErrExpected     ;"<SI> Expected"
 pMatchEqual:
            call pNext
            pop di
            ret
 pMatchString_nx   ENDP
 ;
-; copia il nome del file generico dentro la stringa
-; per il nome del file completo
-; copio da SI a DI
+; Copies the file name at SI to DI; DI ends after it
+;
 pMakeFileName PROC  FAR
 ParseFileName:
             cmp  byte ptr [si],0
@@ -496,56 +504,95 @@ pMakeFileNameEND:
             ret
 pMakeFileName ENDP
 ;
-; attacco alla posizione indicata da DI la stringa (estensione indicata da SI)
-; copio da SI a DI
+; Appends the 4-character extension at SI at DI
+;
 pAttachExtension PROC  FAR
             mov  cx,4
             rep movsb
             ret
 pAttachExtension ENDP
-; inizializza la lettura e scrittura del file
+;
+; Copies the first word of the command line (ES = PSP) into FileName, up to
+; 8 characters and without the extension
+;
+pCommandLine PROC  FAR
+            push si
+            push di
+            mov  si,81h
+            mov  cl,es:[80h]    ;command line length
+            xor  ch,ch
+            lea  di,FileName
+            xor  bx,bx          ;characters copied
+pCmdSkip:   jcxz pCmdEnd        ;skip leading spaces
+            mov  al,es:[si]
+            cmp  al,' '
+            ja   pCmdCopy
+            inc  si
+            dec  cx
+            jmp  pCmdSkip
+pCmdCopy:   jcxz pCmdEnd
+            mov  al,es:[si]
+            cmp  al,' '
+            jbe  pCmdEnd
+            cmp  al,'.'
+            je   pCmdEnd
+            cmp  bx,8
+            jae  pCmdEnd
+            mov  [di+bx],al
+            inc  bx
+            inc  si
+            dec  cx
+            jmp  pCmdCopy
+pCmdEnd:    mov  byte ptr [di+bx],0
+            pop  di
+            pop  si
+            ret
+pCommandLine ENDP
+;
+; Start-up: gets the file name, opens NAME.PAS, creates NAME.ASM and scans
+; the first token
 ;
 pInit_nx   PROC    FAR
             lea  si,sIntro
             call dsp_str
-            ;leggo il nome del file da leggere senza estensione
+            cmp  FileName,0     ;no name on the command line: ask
+            jne  pInitHaveName
+            lea  si,sAskName
+            call dsp_str
             lea  si,FileName
+            mov  cx,8
             call ReadString
             call new_line
-            ;preparo il nome del file da leggere
-            lea  si,FileName
+pInitHaveName:
+            lea  si,FileName    ;NAME.PAS
             lea  di,ReadFileName
             call pMakeFileName
             lea  si,ReadExtension
             call pAttachExtension
-            ;preparo il nome del file da scrivere
-            lea  si,FileName
+            lea  si,FileName    ;NAME.ASM
             lea  di,WriteFileName
             call pMakeFileName
             lea  si,WriteExtension
             call pAttachExtension
-            ;apro il file da leggere e leggo il primo blocco
-            lea  dx,ReadFileName
+            lea  dx,ReadFileName ;open the source and read the first block
             lea  si,ReadFHandle
-            mov  al,0           ;READ MODE
+            mov  al,0           ;read
             call fOpen
             lea  dx,ReadBuffer
+            lea  di,ReadBufferIndex
             call fReadBuffer
-            ;creo e apro il file da leggere
-            lea  dx,WriteFileName
+            lea  dx,WriteFileName ;create the output file
             lea  si,WriteFHandle
-            mov  al,1           ;WRITE MODE
             call fCreate
-            call fOpen
-            ;========================= INIZIO IL PROGRAMMA
-            lea si,sInit                ;scrivo la stringa iniziale (1:    )
+            ;========================= START
+            lea si,sInit                ;"1:" before the first source line
             call dsp_str
             call pGetChar
             call pNext
             ret
 pInit_nx   ENDP
 ;
-; termina la scrittura del file e restituisce un responso
+; Writes what is left in the output buffer and closes both files
 ;
 pTerminate   PROC    FAR
             lea  si,ReadFHandle
@@ -557,4 +604,4 @@ pTerminate   PROC    FAR
             call fClose
            ret
 pTerminate   ENDP
-pGENERALS  ENDS 
+pGENERALS  ENDS

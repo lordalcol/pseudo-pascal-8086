@@ -1,0 +1,25 @@
+12:     read(op)
+13:     write(op)
+14:     while(op<>kESC)
+15:         readInt(y)
+16:         write('=')
+17:         newline
+18:         if op='+'
+19:             x=x+y
+20:         endif
+21:         if op='-'
+22:             x=x-y
+23:         endif
+24:         if op='*'
+25:             x=x*y
+26:         endif
+27:         if op='/'
+28:             x=x/y
+29:         endif
+30:         writeInt(x)
+31:         read(op)
+32:         write(op)
+33:     endwhile
+34:
+35: end.
+36:

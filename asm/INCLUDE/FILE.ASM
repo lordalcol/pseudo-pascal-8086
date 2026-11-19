@@ -1,156 +1,139 @@
 ;=============================================================================
-; GESTIONE DEI FILES DI TESTO: fOpen, fClose, fCreate
-; fReadBuffer, fWriteBuffer, fGetC, fPutC
-; Attenzione: lettura e scrittura sono bufferizzate
+; BUFFERED TEXT FILES on top of DOS INT 21h: fOpen, fCreate, fClose,
+; fReadBuffer, fWriteBuffer, fGetC, fPutC.
+; Files are read and written 256 bytes at a time. A buffer is described by:
+;       SI -> file handle (word)
+;       DX -> 256-byte buffer
+;       DI -> index in the buffer (word), followed for reading by the number
+;             of bytes in the buffer (word)
 ;=============================================================================
 fileS         SEGMENT PARA PUBLIC 'CODE'
               ASSUME  CS:fileS
 ;
-;       apre un file e imposta l'handle
-;               INPUT:  SI points at the file handle
-;                       DX points at ASCII file name
-;                       AL Read: 0 Write: 1
+; Opens a file.        INPUT: SI -> handle, DX -> file name, AL = 0 read, 1 write
 fOpen           PROC FAR
-                mov     ah, 3dh         ;Open the file
-                ;mov     al, 0           ;Open for reading
-                ;lea     dx, ReadFileName    ;Presume DS points at filename
-                int     21h             ; segment.
+                mov     ah, 3Dh
+                int     21h
                 jc      fOpenError
-                mov     [si], ax       ;Save file handle
+                mov     [si], ax        ;save the handle
                 ret
 fOpenError:
                 call    ErrFOpen
-                ret
 fOpen           ENDP
 ;
-;       crea un file
-;               INPUT:  CX file attribute (7: shareable, 0: read only)
-;                       DX points at ASCII file name
+; Creates (or truncates) a file and opens it for writing.
+;                      INPUT: SI -> handle, DX -> file name
 fCreate         PROC FAR
-                mov     cx,0
-                mov     ah, 3Ch         ;create the file
-                int     21h             ; segment.
+                push    cx
+                mov     cx,0            ;normal attributes
+                mov     ah, 3Ch
+                int     21h
                 jc      fCreateError
-                mov     [si], ax       ;Save file handle
+                mov     [si], ax        ;save the handle
+                pop     cx
                 ret
 fCreateError:
                 call    ErrFCreate
-                ret
-fCreate           ENDP
+fCreate         ENDP
 ;
-;       chiude un file
-;               INPUT:  SI points at the file handle
+; Closes a file.       INPUT: SI -> handle
 fClose          PROC FAR
-EOF:            mov     bx, [si]
-                mov     ah, 3eh         ;Close file
+                push    ax
+                push    bx
+                mov     bx, [si]
+                mov     ah, 3Eh
                 int     21h
                 jc      fCloseError
+                pop     bx
+                pop     ax
                 ret
 fCloseError:
                 call    ErrFClose
-                ret
 fClose          ENDP
 ;
-;       legge un buffer di dati
-;               INPUT:  SI points at the file handle
-;                       DX points at the data buffer
+; Reads the next 256 bytes (fewer at the end of the file) into the buffer,
+; sets the index to 0 and the size to the number of bytes read.
 fReadBuffer     PROC FAR
                 push    ax
-                push    si
-                push    dx
                 push    bx
                 push    cx
-                mov     al,0
-                mov     ah,3fh          ;Read data from the file
-                ;lea     dx, Buffer      ;Address of data buffer
-                mov     cx, 256           ;Read 256 bytes
-                mov     bx, [si]        ;Get file handle value
+                mov     ah, 3Fh
+                mov     cx, 256
+                mov     bx, [si]
                 int     21h
                 jc      fReadBufferError
-                ;mov     bx, ax          ;Save for later
-                ;mov     cx, ax
-                jcxz    fReadBufferEOF
+                mov     word ptr [di], 0
+                mov     [di+2], ax
                 pop     cx
                 pop     bx
-                pop     dx
-                pop     si
                 pop     ax
                 ret
 fReadBufferError:
                 call    ErrFRead
-                ret
-fReadBufferEOF:
-                call    FClose
-                ret
 fReadBuffer     ENDP
 ;
-;       scrive un buffer di dati
-;               INPUT:  SI points at the file handle
-;                       DX points at the data buffer
-fWriteBuffer     PROC FAR
+; Writes the [DI] bytes in the buffer and empties it.
+fWriteBuffer    PROC FAR
                 push    ax
-                push    si
-                push    dx
                 push    bx
                 push    cx
-                mov     al,1
-                mov     ah,40h          ;Write data from the file
-                ;lea     dx, Buffer      ;Address of data buffer
-                mov     cx, [di]           ;write 256 bytes
-                mov     bx, [si]        ;Get file handle value
+                mov     ah, 40h
+                mov     cx, [di]
+                mov     bx, [si]
                 int     21h
                 jc      fWriteBufferError
-                ;mov     bx, ax          ;Save for later
-                ;mov     cx, ax
+                cmp     ax, cx          ;disk full?
+                jne     fWriteBufferError
+                mov     word ptr [di], 0
                 pop     cx
                 pop     bx
-                pop     dx
-                pop     si
                 pop     ax
                 ret
 fWriteBufferError:
                 call    ErrFWrite
-                ret
 fWriteBuffer    ENDP
 ;
-;       legge un carattere dal buffer indicato, se il buffer finisce ne carica uno nuovo
-;               INPUT:  SI points at the file handle
-;                       DX points at the data buffer
-;                       DI points at the index of the buffer
+; Returns the next character in AL, reading a new block when the buffer is
+; used up. At the end of the file it returns EOFCHR, again and again.
 fGetC           PROC FAR
-                push    si
-                mov     si,dx
-                add     si,[di]
-                mov     al,[si]
-                inc     word ptr [di]
-                pop     si
-                cmp     word ptr [di], 256          ;Reach EOF yet?
-                je      fGetcNewBuffer
-                ret
-fGetcNewBuffer:
-                mov     word ptr [di],0
+                push    bx
+                mov     bx, [di]
+                cmp     bx, [di+2]
+                jb      fGetCHave
+                cmp     word ptr [di+2], 256    ;a short block was the last one
+                jb      fGetCEOF
                 call    fReadBuffer
+                cmp     word ptr [di+2], 0
+                je      fGetCEOF
+                xor     bx, bx
+fGetCHave:
+                push    si
+                mov     si, dx
+                mov     al, [si+bx]
+                pop     si
+                inc     word ptr [di]
+                pop     bx
+                ret
+fGetCEOF:
+                mov     al, EOFCHR
+                pop     bx
                 ret
 fGetC           ENDP
 ;
-;       scrive un carattere nel buffer indicato, se il buffer finisce lo scrive e lo svuota
-;               INPUT:  SI points at the file handle
-;                       DX points at the data buffer
-;                       DI points at the index of the buffer
-;                       AL carattere da scrivere
+; Adds the character in AL to the buffer and writes the buffer when full.
 fPutC           PROC FAR
+                push    bx
                 push    si
-                mov     si,dx
-                add     si,[di]
-                mov     [si],al
-                inc     word ptr [di]
+                mov     bx, [di]
+                mov     si, dx
+                mov     [si+bx], al
                 pop     si
-                cmp     word ptr [di], 256          ;Reach EOF yet?
-                je      fPutcNewBuffer
-                ret
-fPutcNewBuffer:
-                call far ptr fWriteBuffer
-                mov     word ptr [di],0
+                inc     word ptr [di]
+                pop     bx
+                cmp     word ptr [di], 256
+                jne     fPutCDone
+                call    fWriteBuffer
+fPutCDone:
                 ret
 fPutC           ENDP
-fileS      ENDS
+fileS         ENDS

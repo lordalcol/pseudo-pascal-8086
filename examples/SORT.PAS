@@ -1,17 +1,17 @@
 program
     array a[6]
     var i,j,N,tmp,x,y
-    $titolo = "PROGRAMMA PER L'ORDINAMENTO DI UN VETTORE DI INTERI"
-    $input1 = "Inserire un intero ["
+    $title = "SORTS A LIST OF INTEGERS"
+    $input1 = "Enter an integer ["
     $input2 = "]: "
-    $output = "Ecco il vettore ordinato: "
+    $output = "Sorted: "
 begin
     N=6
     i=0
-    writeStr($titolo)
+    writeStr($title)
     newline
-    
-    ;lettura del vettore
+
+    ;read the list
     loop N
         writeStr($input1)
         writeInt(i)
@@ -21,7 +21,7 @@ begin
         i=i+1
     endloop
 
-    ;ordinamento
+    ;sort it
     j=0
     i=1
     while(j<N)
@@ -36,7 +36,7 @@ begin
         j=j+1
         i=j
     endwhile
-    ;output
+    ;print it
     writeStr($output)
     newline
     i=0

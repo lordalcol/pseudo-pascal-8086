@@ -1,0 +1,5 @@
+Pseudo-Pascal to 8086 assembly compiler - Lorenzo Dal Col, 2006
+1: program
+2:     $s = "not closed
+3:
+[LINE: 3] Error: " Expected

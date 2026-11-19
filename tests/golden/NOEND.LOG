@@ -1,0 +1,6 @@
+Pseudo-Pascal to 8086 assembly compiler - Lorenzo Dal Col, 2006
+1: program
+2: begin
+3:     newline
+4: end
+5:
