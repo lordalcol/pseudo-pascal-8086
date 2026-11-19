@@ -618,9 +618,12 @@ applyTheme((store.get('theme') as Theme | null) ?? 'system');
 const savedSpeed = store.get('speed');
 if (savedSpeed && [...ui.speed.options].some((o) => o.value === savedSpeed)) ui.speed.value = savedSpeed;
 
-const hash = new URLSearchParams(location.hash.slice(1)).get('src');
-let initial: { text: string; name: string } | null = null;
-if (hash) {
+// #src=... is a shared program; #example=PRIMES opens an example; &run starts it.
+const params = new URLSearchParams(location.hash.slice(1));
+const hash = params.get('src');
+const linked = EXAMPLES.find((x) => x.name === (params.get('example') ?? '').toUpperCase());
+let initial: { text: string; name: string } | null = linked ? { text: linked.source, name: linked.name } : null;
+if (hash && !linked) {
   try {
     initial = { text: fromBase64Url(hash), name: 'PROGRAM' };
   } catch { /* bad link */ }
@@ -634,3 +637,4 @@ ui.exampleInfo.textContent = match?.info ?? (initial ? '' : first.info);
 loadSource(initial?.text ?? first.source, match?.name ?? (initial ? 'PROGRAM' : first.name));
 setState('idle');
 updateCursorPos();
+if (params.has('run') && result.asm) start();
