@@ -14,6 +14,7 @@
     "golden": "node scripts/dos.mjs"
   },
   "devDependencies": {
+    "@types/node": "^24.19.2",
     "emulators": "8.5.2",
     "happy-dom": "^21.0.4",
     "typescript": "^7.0.2",

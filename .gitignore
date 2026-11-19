@@ -5,3 +5,4 @@ build/
 *.OBJ
 *.err
 *.ERR
+.claude/

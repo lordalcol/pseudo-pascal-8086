@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pseudo-Pascal 8086 · a compiler from 2006</title>
+    <meta name="description" content="A pseudo-Pascal to 8086 assembly compiler written in 8086 assembly in 2006, ported to JavaScript: write a program, see the assembly it compiles to, and run it on a simulated 8086." />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#faf8f1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111418" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">86</span>
+        <div>
+          <h1>Pseudo-Pascal 8086</h1>
+          <p>A compiler written in 8086 assembly in 2006, running in your browser</p>
+        </div>
+      </div>
+      <nav class="topnav">
+        <button id="share-btn" class="btn ghost" type="button" title="Copy a link to this program">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+          <span>Share</span>
+        </button>
+        <button id="theme-btn" class="btn ghost icon-only" type="button" title="Theme" aria-label="Theme">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/></svg>
+        </button>
+        <a class="btn ghost icon-only" href="https://github.com/lordalcol/pseudo-pascal-8086" title="Source on GitHub" aria-label="Source on GitHub">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 1.5-4-2-6-2.5m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg>
+        </a>
+      </nav>
+    </header>
+
+    <div class="toolbar-wrap">
+      <div class="toolbar" role="toolbar" aria-label="Program">
+        <label class="field">
+          <span>Example</span>
+          <select id="examples"></select>
+        </label>
+        <span class="toolbar-sep" aria-hidden="true"></span>
+        <button id="run-btn" class="btn primary" type="button" title="Compile and run (Ctrl+Enter)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>
+          <span id="run-label">Run</span>
+        </button>
+        <button id="pause-btn" class="btn" type="button" title="Pause (F8)" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>
+          Pause
+        </button>
+        <button id="step-btn" class="btn" type="button" title="Run one instruction (F10)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15a8 8 0 0 1 15-4M19 5v6h-6M12 20h.01"/></svg>
+          Step
+        </button>
+        <button id="stop-btn" class="btn danger" type="button" title="Stop (Shift+F5)" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>
+          Stop
+        </button>
+        <label class="field" title="Instructions per second">
+          <span>Speed</span>
+          <select id="speed">
+            <option value="Infinity" selected>Max</option>
+            <option value="20000">20k/s</option>
+            <option value="1000">1k/s</option>
+            <option value="50">50/s</option>
+            <option value="5">5/s</option>
+          </select>
+        </label>
+        <span class="toolbar-spacer"></span>
+        <span id="status" class="badge" data-state="idle">Ready</span>
+      </div>
+      <p id="example-info" class="example-info"></p>
+    </div>
+
+    <main class="layout">
+      <section class="panel source-panel" aria-labelledby="source-title">
+        <div class="panel-head">
+          <h2 id="source-title"><label for="source">Pseudo-Pascal</label></h2>
+          <span class="head-actions">
+            <span id="cursor-pos" class="muted mono"></span>
+            <button id="lang-btn" class="btn ghost small" type="button">Language</button>
+          </span>
+        </div>
+        <div class="editor" id="editor">
+          <div class="gutter" id="src-gutter" aria-hidden="true"></div>
+          <div class="editor-main">
+            <pre id="highlight" class="editor-layer" aria-hidden="true"></pre>
+            <textarea id="source" class="editor-layer" spellcheck="false" wrap="off" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+          </div>
+        </div>
+        <p id="compile-error" class="error" role="alert" hidden></p>
+      </section>
+
+      <section class="panel asm-panel" aria-labelledby="asm-title">
+        <div class="panel-head">
+          <div class="tabs" role="tablist">
+            <button id="tab-asm" class="tab" role="tab" aria-selected="true" aria-controls="asm-view">Assembly</button>
+            <button id="tab-log" class="tab" role="tab" aria-selected="false" aria-controls="log-view">Compiler screen</button>
+          </div>
+          <span class="head-actions">
+            <span id="asm-size" class="muted"></span>
+            <button id="download-btn" class="btn ghost small" type="button" title="Download the .ASM file, to assemble with MASM or JWasm">.ASM</button>
+          </span>
+        </div>
+        <div id="asm-view" class="code-view" role="tabpanel" tabindex="0" aria-label="Generated assembly"></div>
+        <div id="log-view" class="dos dos-small" role="tabpanel" hidden aria-label="What the compiler printed"></div>
+      </section>
+
+      <section class="col run-col">
+        <div class="panel screen-panel">
+          <div class="panel-head">
+            <h2>DOS screen</h2>
+            <span class="muted hint" id="screen-hint">Click the screen and type</span>
+          </div>
+          <div id="screen" class="dos" tabindex="0" role="application" aria-label="Program screen: focus it and type to send keys"></div>
+          <div class="touch-keys">
+            <input id="key-input" class="mono" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Type keys here" aria-label="Keys for the program" />
+            <button class="btn small" type="button" data-key="13">Enter</button>
+            <button class="btn small" type="button" data-key="8">⌫</button>
+            <button class="btn small" type="button" data-key="27">Esc</button>
+          </div>
+        </div>
+
+        <div class="panel debug-panel">
+          <div class="panel-head">
+            <h2>8086</h2>
+            <span id="steps" class="muted mono"></span>
+          </div>
+          <p id="run-error" class="error" role="alert" hidden></p>
+          <div class="regs" id="regs"></div>
+          <div class="flags" id="flags"></div>
+          <div class="debug-grid">
+            <div>
+              <h3>Variables</h3>
+              <div id="vars" class="vars"></div>
+            </div>
+            <div>
+              <h3>Stack</h3>
+              <div id="stack" class="stack"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>
+        Written in 8086 assembly by <a href="https://lorenzodalcol.com/personal-projects">Lorenzo Dal Col</a> in 2006, restored and
+        ported to JavaScript in 2026. The JavaScript compiler produces the same output as the original, byte for byte.
+      </p>
+    </footer>
+
+    <dialog id="lang-dialog" class="dialog">
+      <div class="dialog-body">
+        <header class="dialog-head">
+          <h2>The language</h2>
+          <button class="btn ghost icon-only" id="lang-close" aria-label="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </header>
+        <div class="lang">
+          <p>A small Pascal-like language with 16-bit signed integers. Keywords are case-insensitive, <code>;</code> starts a comment, and every block has its own closing keyword.</p>
+<pre><code>program
+    var a, b, i          ; integers (also used as characters)
+    array v[10]          ; arrays of integers, indexed from 0
+    $hello = "Hello!"    ; string constants, for writeStr
+begin
+    a = 7 * (b + 1) / 2  ; + - * /   and parentheses
+    if a > 3 &amp; !(b = 0)   ; = &lt;&gt; &lt; &gt; &lt;= &gt;=   &amp; | ~(xor) !(not)
+        writeStr($hello)
+    else
+        writeInt(a)
+    endif
+    while i &lt; 10
+        v[i] = i * i
+        i = i + 1
+    endwhile
+    loop 3               ; repeats 3 times, using CX
+        write('*')
+    endloop
+    read(a)              ; a key, without echo
+    readInt(b)           ; a number, with echo
+    write(a)             ; a character
+    newline
+    masm                 ; assembly, copied as is
+        mov ax, a
+        shl ax, 1
+        mov b, ax
+    endmasm
+end.</code></pre>
+          <p>The compiler is one pass, recursive descent, after Jack Crenshaw's <a href="https://compilers.iecc.com/crenshaw/">Let's Build a Compiler</a>. The code it writes is a simple stack machine: <code>AX</code> holds the value being computed, and <code>PUSH AX</code> / <code>POP BX</code> keep the operands.</p>
+        </div>
+      </div>
+    </dialog>
+  </body>
+</html>
